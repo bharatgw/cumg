@@ -10,15 +10,15 @@ from pyomo.mpec import Complementarity, complements
 
 from .mcp import solve_pyomo_mcp_model
 from .results import SolverResult
-from .validation import as_matrix_lists, normalize_game_inputs
+from .validation import as_matrix_lists, normalize_game_inputs, normalize_probabilities
 
 
 def build_msd_mcp_model(A_list, B_list, p=None, gamma: float = 0.0) -> pyo.ConcreteModel:
     """Build the Pyomo MCP model for an MSD risk-aware bimatrix game."""
 
     A, B, p = normalize_game_inputs(A_list, B_list, p)
-    if gamma < 0:
-        raise ValueError("gamma must be nonnegative.")
+    if not np.isfinite(gamma) or gamma < 0:
+        raise ValueError("gamma must be finite and nonnegative.")
     A_list, B_list = as_matrix_lists(A, B)
     K, n1, n2 = A.shape
 
@@ -28,12 +28,7 @@ def build_msd_mcp_model(A_list, B_list, p=None, gamma: float = 0.0) -> pyo.Concr
     model.K = pyo.RangeSet(0, K - 1)
 
     def to_param_3d(mats):
-        return {
-            (k, i, j): float(mats[k][i, j])
-            for k in range(K)
-            for i in range(n1)
-            for j in range(n2)
-        }
+        return {(k, i, j): float(mats[k][i, j]) for k in range(K) for i in range(n1) for j in range(n2)}
 
     model.p = pyo.Param(model.K, initialize={k: float(p[k]) for k in range(K)}, within=pyo.NonNegativeReals)
     model.gamma = pyo.Param(initialize=float(gamma), within=pyo.NonNegativeReals)
@@ -140,9 +135,12 @@ def solve_msd_mcp(
 def msd_value_from_state_payoffs(state_payoffs, p, gamma: float) -> float:
     """Evaluate ``mean + gamma * E[min(0, payoff - mean)]``."""
 
+    if not np.isfinite(gamma) or gamma < 0:
+        raise ValueError("gamma must be finite and nonnegative.")
     state_payoffs = np.asarray(state_payoffs, dtype=float)
-    p = np.asarray(p, dtype=float)
-    p = p / p.sum()
+    if not np.all(np.isfinite(state_payoffs)):
+        raise ValueError("state_payoffs must contain finite values.")
+    p = normalize_probabilities(p, state_payoffs.shape[0])
     mean = float(p @ state_payoffs)
     downside = np.minimum(0.0, state_payoffs - mean)
     return mean + gamma * float(p @ downside)
@@ -154,6 +152,10 @@ def msd_profile_values(A_list, B_list, p, gamma: float, x, y) -> dict[str, np.nd
     A, B, p = normalize_game_inputs(A_list, B_list, p)
     x = np.asarray(x, dtype=float)
     y = np.asarray(y, dtype=float)
+    if x.shape != (A.shape[1],) or y.shape != (A.shape[2],):
+        raise ValueError(f"x and y must have shapes ({A.shape[1]},) and ({A.shape[2]},).")
+    if not np.all(np.isfinite(x)) or not np.all(np.isfinite(y)):
+        raise ValueError("x and y must contain finite strategy values.")
     u1_states = np.einsum("i,kij,j->k", x, A, y)
     u2_states = np.einsum("i,kij,j->k", x, B, y)
     return {
@@ -162,4 +164,3 @@ def msd_profile_values(A_list, B_list, p, gamma: float, x, y) -> dict[str, np.nd
         "u1_states": u1_states,
         "u2_states": u2_states,
     }
-

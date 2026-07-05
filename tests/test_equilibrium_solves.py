@@ -75,7 +75,8 @@ def test_small_support_msd_finds_dominant_action_equilibrium_with_full_support_c
     assert result.success, result.best_error
     assert_pure_first_action(result.x, result.y)
     assert result.support == ((0, 1), (0, 1))
-    assert result.scenarios == (0, 1)
+    assert result.scenarios == ((0, 1), (0, 1))
+    assert result.metadata["certificate"]["eta"] <= config.epsilon
 
 
 @pytest.mark.solver
@@ -96,7 +97,8 @@ def test_small_support_cvar_finds_dominant_action_equilibrium_with_full_support_
     assert result.success, result.best_error
     assert_pure_first_action(result.x, result.y)
     assert result.support == ((0, 1), (0, 1))
-    assert result.scenarios == (0, 1)
+    assert result.scenarios == ((0, 1), (0, 1))
+    assert result.metadata["certificate"]["eta"] <= config.epsilon
 
 
 @pytest.mark.solver

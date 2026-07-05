@@ -23,4 +23,3 @@ def matching_pennies_game():
     B = [-A[0]]
     p = np.array([1.0])
     return A, B, p
-

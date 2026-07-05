@@ -91,10 +91,22 @@ def run_mystic_seed(A_list, B_list, p, gamma: float, maxiter: int = 2000, popsiz
     except Exception as exc:  # pragma: no cover - optional dependency
         raise RuntimeError("Install cumgSolver[mystic] to use run_mystic_seed.") from exc
 
-    A, _, p = normalize_game_inputs(A_list, B_list, p)
+    A, B, p = normalize_game_inputs(A_list, B_list, p)
     K, n1, n2 = A.shape
-    lb = np.array([0.0] * n1 + [0.0] * n2 + [0.0] * K + [-1.0] * K + [0.0] * K + [-1.0] * K + [-1.0, -1.0])
-    ub = np.array([1.0] * n1 + [1.0] * n2 + list(gamma * p) + [0.0] * K + list(gamma * p) + [0.0] * K + [2.0, 2.0])
+    payoff_scale = max(1.0, float(max(np.max(np.abs(A)), np.max(np.abs(B)))))
+    alpha_bound = (1.0 + max(0.0, gamma)) * payoff_scale
+    lb = np.array(
+        [0.0] * n1
+        + [0.0] * n2
+        + [0.0] * K
+        + [-2.0 * payoff_scale] * K
+        + [0.0] * K
+        + [-2.0 * payoff_scale] * K
+        + [-alpha_bound, -alpha_bound]
+    )
+    ub = np.array(
+        [1.0] * n1 + [1.0] * n2 + list(gamma * p) + [0.0] * K + list(gamma * p) + [0.0] * K + [alpha_bound, alpha_bound]
+    )
     rng = np.random.default_rng(seed)
     x0 = lb + (ub - lb) * rng.random(lb.size)
 

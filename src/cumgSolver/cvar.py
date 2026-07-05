@@ -10,15 +10,15 @@ from pyomo.mpec import Complementarity, complements
 
 from .mcp import solve_pyomo_mcp_model
 from .results import SolverResult
-from .validation import as_matrix_lists, normalize_game_inputs
+from .validation import as_matrix_lists, normalize_game_inputs, normalize_probabilities
 
 
 def build_cvar_mcp_model(A_list, B_list, p=None, gamma: float = 0.0, alpha: float = 0.5) -> pyo.ConcreteModel:
     """Build the Pyomo MCP model for a lower-tail CVaR risk-aware bimatrix game."""
 
     A, B, p = normalize_game_inputs(A_list, B_list, p)
-    if gamma < 0:
-        raise ValueError("gamma must be nonnegative.")
+    if not 0 <= gamma <= 1:
+        raise ValueError("gamma must be in [0, 1].")
     if not 0 < alpha <= 1:
         raise ValueError("alpha must be in (0, 1].")
     A_list, B_list = as_matrix_lists(A, B)
@@ -30,12 +30,7 @@ def build_cvar_mcp_model(A_list, B_list, p=None, gamma: float = 0.0, alpha: floa
     model.K = pyo.RangeSet(0, K - 1)
 
     def to_param_3d(mats):
-        return {
-            (k, i, j): float(mats[k][i, j])
-            for k in range(K)
-            for i in range(n1)
-            for j in range(n2)
-        }
+        return {(k, i, j): float(mats[k][i, j]) for k in range(K) for i in range(n1) for j in range(n2)}
 
     model.p = pyo.Param(model.K, initialize={k: float(p[k]) for k in range(K)}, within=pyo.NonNegativeReals)
     model.gamma = pyo.Param(initialize=float(gamma), within=pyo.NonNegativeReals)
@@ -162,9 +157,12 @@ def cvar_tail_weights(payoffs, p, gamma: float, alpha: float) -> np.ndarray:
 
     if not 0 < alpha <= 1:
         raise ValueError("alpha must be in (0, 1].")
+    if not 0 <= gamma <= 1:
+        raise ValueError("gamma must be in [0, 1].")
     payoffs = np.asarray(payoffs, dtype=float)
-    p = np.asarray(p, dtype=float)
-    p = p / p.sum()
+    if not np.all(np.isfinite(payoffs)):
+        raise ValueError("payoffs must contain finite values.")
+    p = normalize_probabilities(p, payoffs.shape[0])
     lam = np.zeros_like(p)
     if gamma <= 1e-12:
         return lam
@@ -184,8 +182,9 @@ def cvar_value_from_state_payoffs(payoffs, p, gamma: float, alpha: float) -> flo
     """Evaluate the lower-tail CVaR-adjusted payoff."""
 
     payoffs = np.asarray(payoffs, dtype=float)
-    p = np.asarray(p, dtype=float)
-    p = p / p.sum()
+    if not np.all(np.isfinite(payoffs)):
+        raise ValueError("payoffs must contain finite values.")
+    p = normalize_probabilities(p, payoffs.shape[0])
     return (1.0 - gamma) * float(p @ payoffs) + float(cvar_tail_weights(payoffs, p, gamma, alpha) @ payoffs)
 
 
@@ -195,6 +194,10 @@ def cvar_profile_values(A_list, B_list, p, gamma: float, alpha: float, x, y) -> 
     A, B, p = normalize_game_inputs(A_list, B_list, p)
     x = np.asarray(x, dtype=float)
     y = np.asarray(y, dtype=float)
+    if x.shape != (A.shape[1],) or y.shape != (A.shape[2],):
+        raise ValueError(f"x and y must have shapes ({A.shape[1]},) and ({A.shape[2]},).")
+    if not np.all(np.isfinite(x)) or not np.all(np.isfinite(y)):
+        raise ValueError("x and y must contain finite strategy values.")
     u1_states = np.einsum("i,kij,j->k", x, A, y)
     u2_states = np.einsum("i,kij,j->k", x, B, y)
     return {
@@ -203,4 +206,3 @@ def cvar_profile_values(A_list, B_list, p, gamma: float, alpha: float, x, y) -> 
         "u1_states": u1_states,
         "u2_states": u2_states,
     }
-

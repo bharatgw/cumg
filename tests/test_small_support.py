@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 from cumgSolver.results import SolverResult, SupportSearchConfig
 from cumgSolver.small_support import (
@@ -6,6 +7,8 @@ from cumgSolver.small_support import (
     _search_with_solver,
     candidate_support_pairs,
     expand_support_probs,
+    full_msd_regret,
+    restricted_profile_gap_msd,
     sample_supports,
 )
 
@@ -31,7 +34,9 @@ def test_candidate_support_pairs_respects_candidate_count_and_support_sizes():
     for (s1, s2), scenarios in pairs:
         assert len(s1) == 2
         assert len(s2) == 2
-        assert len(scenarios) == 3
+        assert len(scenarios) == 2
+        assert len(scenarios[0]) == 3
+        assert len(scenarios[1]) == 3
 
 
 def test_expand_support_probs_places_probabilities_at_support_indices():
@@ -53,6 +58,54 @@ def test_restricted_data_slices_actions_and_scenarios():
     np.testing.assert_allclose(p_sub, np.array([5.0 / 7.0, 2.0 / 7.0]))
     np.testing.assert_allclose(A_sub[0], A[2][np.ix_((1, 3), (0, 4))])
     np.testing.assert_allclose(B_sub[1], B[0][np.ix_((1, 3), (0, 4))])
+
+
+def test_restricted_data_uses_union_of_player_scenario_supports():
+    A = np.arange(3 * 4 * 5, dtype=float).reshape(3, 4, 5)
+    B = -A
+    p = np.array([0.2, 0.3, 0.5])
+
+    _, _, p_sub, _, _, scenarios = _restricted_data(A, B, p, ((1, 3), (0, 4)), ((2,), (0, 2)))
+
+    assert scenarios == (0, 2)
+    np.testing.assert_allclose(p_sub, np.array([2.0 / 7.0, 5.0 / 7.0]))
+
+
+def test_full_msd_regret_is_zero_for_dominant_action_profile():
+    A = [np.array([[4.0, 4.0], [0.0, 0.0]])]
+    B = [np.array([[4.0, 0.0], [4.0, 0.0]])]
+
+    cert = full_msd_regret(
+        A,
+        B,
+        np.array([1.0]),
+        gamma=0.5,
+        x=np.array([1.0, 0.0]),
+        y=np.array([1.0, 0.0]),
+    )
+
+    assert cert["eta"] == pytest.approx(0.0, abs=1e-8)
+
+
+def test_restricted_profile_gap_msd_returns_screen_certificate():
+    A = [np.array([[4.0, 4.0], [0.0, 0.0]])]
+    B = [np.array([[4.0, 0.0], [4.0, 0.0]])]
+
+    screen = restricted_profile_gap_msd(
+        A,
+        B,
+        np.array([1.0]),
+        gamma=0.5,
+        S=((0, 1), (0, 1)),
+        T=((0,), (0,)),
+        n_starts=1,
+        seed=0,
+        maxiter=200,
+    )
+
+    assert screen["success"]
+    assert screen["eta"] <= 1e-6
+    np.testing.assert_allclose(screen["x"], np.array([1.0, 0.0]), atol=1e-5)
 
 
 def test_search_with_solver_expands_restricted_solution_to_full_profile():
@@ -96,4 +149,3 @@ def test_search_with_solver_reports_best_error_when_all_candidates_fail():
 
     assert not result.success
     assert result.best_error == "solver unavailable"
-

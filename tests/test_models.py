@@ -56,6 +56,13 @@ def test_build_cvar_mcp_model_rejects_invalid_alpha():
         build_cvar_mcp_model(A, B, p, gamma=0.5, alpha=1.5)
 
 
+def test_build_cvar_mcp_model_rejects_gamma_above_one():
+    A, B, p = demo_game()
+
+    with pytest.raises(ValueError, match="gamma"):
+        build_cvar_mcp_model(A, B, p, gamma=1.5, alpha=0.5)
+
+
 def test_solve_pyomo_mcp_model_reports_missing_solvers():
     A, B, p = demo_game()
     model = build_msd_mcp_model(A, B, p, gamma=0.8)

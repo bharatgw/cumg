@@ -39,6 +39,16 @@ def test_normalize_game_inputs_rejects_zero_probability_mass():
         normalize_game_inputs(A, B, np.array([0.0, 0.0]))
 
 
+def test_normalize_game_inputs_rejects_nonfinite_inputs():
+    A = [np.eye(2), np.ones((2, 2))]
+    B = [np.eye(2), np.ones((2, 2))]
+
+    with pytest.raises(ValueError, match="finite"):
+        normalize_game_inputs(A, B, np.array([np.nan, 1.0]))
+    with pytest.raises(ValueError, match="finite payoff"):
+        normalize_game_inputs([np.array([[np.inf]])], [np.array([[1.0]])])
+
+
 def test_normalize_game_inputs_rejects_non_matrix_inputs():
     with pytest.raises(ValueError, match="2D payoff matrices"):
         normalize_game_inputs(np.array([1.0, 2.0]), np.array([1.0, 2.0]))
@@ -54,4 +64,3 @@ def test_as_matrix_lists_preserves_scenarios():
     assert len(B_list) == 2
     np.testing.assert_allclose(A_list[1], A[1])
     np.testing.assert_allclose(B_list[0], B[0])
-
