@@ -1,5 +1,15 @@
 # cumgSolver
 
+<!-- TODO
+TODO: Once the paper details are finalized:
+- Add a README citation section with the final paper title, venue/arXiv, year, DOI, and BibTeX.
+- Add a root CITATION.cff so GitHub exposes the recommended citation.
+- Add project.urls entries in pyproject.toml for the paper/arXiv/DOI if public links are available.
+- Reference the paper in experiments/README.md as the source for the reproduced experiments/results.
+- Add citation markdown to the relevant notebooks' intro cells.
+- Add short source docstring references only where a module implements a paper-specific formulation or algorithm.
+-->
+
 `cumgSolver` contains Python tools for solving coherent utility measure games. The library code is separated from the experiment notebooks and committed result CSVs so the package can be installed cleanly while the research workflow remains reproducible.
 
 ## What It Supports
@@ -80,7 +90,24 @@ ruff format --check src tests examples
 
 Solver-gated tests are marked with `pytest.mark.solver` and skip when PATH/PATHAMPL or IPOPT is unavailable.
 
+## Citation
+
+<!-- TODO: Replace this placeholder with the final paper citation once DOI/arXiv/venue details are available.
+
+If you use `cumgSolver` in academic work, please cite the associated paper:
+
+> Bharat Gangwani and Arunesh Sinha. “Paper Title.” Venue or arXiv, Year.
+
+```bibtex
+@misc{gangwani2026cumgsolver,
+  title = {Paper Title},
+  author = {Gangwani, Bharat and Sinha, Arunesh},
+  year = {2026},
+  note = {Update with venue, DOI, or arXiv identifier}
+}
+```
+-->
+
 ## License
 
 The Python package code is released under the MIT License. Third-party solver binaries and reference PDFs are not included in the publishable repository; install or obtain them from their original sources and follow their licenses.
-
