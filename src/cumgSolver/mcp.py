@@ -31,9 +31,14 @@ def solve_pyomo_mcp_model(
         for key, value in solver_options.items():
             opt.options[key] = value
 
+    def prepare_model_for_solver(solver_name: str):
+        if solver_name == "ipopt":
+            pyo.TransformationFactory("mpec.simple_nonlinear").apply_to(model)
+
     opt = _solver_factory(solver)
     if opt is not None:
         attempted.append(solver)
+        prepare_model_for_solver(solver)
         apply_options(opt)
         start = perf_counter()
         result = opt.solve(model, tee=tee)
@@ -43,8 +48,7 @@ def solve_pyomo_mcp_model(
         attempted.append(fallback_solver)
         fallback = _solver_factory(fallback_solver)
         if fallback is not None:
-            if fallback_solver == "ipopt":
-                pyo.TransformationFactory("mpec.simple_nonlinear").apply_to(model)
+            prepare_model_for_solver(fallback_solver)
             apply_options(fallback)
             start = perf_counter()
             result = fallback.solve(model, tee=tee)
@@ -55,4 +59,3 @@ def solve_pyomo_mcp_model(
         f"No available solver found. Tried: {tried}. Install PATH/PATHAMPL or IPOPT "
         "and make it visible to Pyomo."
     )
-
