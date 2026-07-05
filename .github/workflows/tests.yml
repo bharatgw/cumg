@@ -30,3 +30,29 @@ jobs:
       - name: Run tests
         run: python -m pytest -m "not solver"
 
+  solver-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Conda with Python and IPOPT
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          activate-environment: cumgsolver-ci
+          auto-update-conda: false
+          channel-priority: strict
+          channels: conda-forge
+          python-version: "3.12"
+
+      - name: Install package
+        shell: bash -el {0}
+        run: |
+          conda install -y ipopt
+          python -m pip install -e ".[dev]"
+          python -c "import pyomo.environ as pyo; assert pyo.SolverFactory('ipopt').available(False)"
+
+      - name: Run solver tests
+        shell: bash -el {0}
+        run: python -m pytest -m solver
