@@ -43,6 +43,17 @@ The package does not vendor PATH, PATHAMPL, IPOPT, or other solver binaries. Ins
 - IPOPT can be used as a fallback through Pyomo's `mpec.simple_nonlinear` transform.
 - Solver-dependent tests and examples skip or fail clearly when no solver is available.
 
+To check whether your current Python environment can see those executables:
+
+```python
+from cumgSolver import available_solvers, format_solver_availability
+
+print(available_solvers())
+print(format_solver_availability())
+```
+
+This is useful in notebooks and examples because model construction and payoff/regret utilities work without solver binaries, while MCP solves require an available backend.
+
 ## Quickstart
 
 ```python
