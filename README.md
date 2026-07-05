@@ -1,6 +1,6 @@
 # cumgSolver
 
-`cumgSolver` contains Python tools for risk-aware complete-uncertainty matrix games. The library code is separated from the experiment notebooks and committed result CSVs so the package can be installed cleanly while the research workflow remains reproducible.
+`cumgSolver` contains Python tools for solving coherent utility measure games. The library code is separated from the experiment notebooks and committed result CSVs so the package can be installed cleanly while the research workflow remains reproducible.
 
 ## What It Supports
 
