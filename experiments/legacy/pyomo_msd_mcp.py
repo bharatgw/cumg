@@ -6,12 +6,12 @@
 #   python pyomo_msd_mcp.py   # runs the demo instance
 # Or import build_and_solve(A_list,B_list,p,gamma,solver='path') in your project.
 
-from typing import List, Dict, Any
 import numpy as np
 import pyomo.environ as pyo
 from pyomo.mpec import Complementarity, complements
 
-def build_model(A_list: List[np.ndarray], B_list: List[np.ndarray], p: np.ndarray, gamma: float) -> pyo.ConcreteModel:
+
+def build_model(A_list: list[np.ndarray], B_list: list[np.ndarray], p: np.ndarray, gamma: float) -> pyo.ConcreteModel:
     K = len(A_list)
     n1, n2 = A_list[0].shape
     assert all(Ak.shape == (n1,n2) for Ak in A_list)

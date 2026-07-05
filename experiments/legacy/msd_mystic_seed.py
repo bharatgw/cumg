@@ -5,6 +5,7 @@
 
 import numpy as np
 
+
 def fb(a, b):
     return np.sqrt(a*a + b*b) - (a + b)
 
@@ -74,9 +75,9 @@ def _bounds(A_list, B_list, p, gamma):
 
 def run_mystic_seed(A_list, B_list, p, gamma, maxiter=2000, popsize=80, seed=13):
     try:
+        from mystic.monitors import VerboseMonitor
         from mystic.solvers import diffev2
         from mystic.termination import ChangeOverGeneration
-        from mystic.monitors import VerboseMonitor
     except Exception as e:
         raise RuntimeError("mystic is required for this function") from e
     n1, n2 = A_list[0].shape

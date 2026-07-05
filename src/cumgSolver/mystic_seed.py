@@ -104,7 +104,7 @@ def run_mystic_seed(A_list, B_list, p, gamma: float, maxiter: int = 2000, popsiz
     return diffev2(
         cost,
         x0=x0,
-        bounds=list(zip(lb, ub)),
+        bounds=list(zip(lb, ub, strict=True)),
         maxiter=maxiter,
         popsize=popsize,
         ftol=1e-10,
