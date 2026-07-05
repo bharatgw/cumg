@@ -102,6 +102,21 @@ def _simplex_starts(dim: int, rng: np.random.Generator, n_random: int):
     return starts
 
 
+def _validate_mixed_strategy(strategy, n: int, name: str, atol: float = 1e-6) -> np.ndarray:
+    strategy = np.asarray(strategy, dtype=float)
+    if strategy.shape != (n,):
+        raise ValueError(f"{name} must have shape ({n},); got {strategy.shape}.")
+    if not np.all(np.isfinite(strategy)):
+        raise ValueError(f"{name} must contain finite probabilities.")
+    if np.any(strategy < -atol):
+        raise ValueError(f"{name} must contain nonnegative probabilities.")
+    total = float(strategy.sum())
+    if not np.isclose(total, 1.0, atol=atol):
+        raise ValueError(f"{name} must sum to 1.")
+    strategy = np.maximum(strategy, 0.0)
+    return strategy / strategy.sum()
+
+
 def _maximize_on_simplex(
     objective: Callable[[np.ndarray], float],
     dim: int,
@@ -133,6 +148,8 @@ def full_msd_regret(A_list, B_list, p, gamma: float, x, y, n_starts: int = 20, s
     A, B, p = normalize_game_inputs(A_list, B_list, p)
     rng = np.random.default_rng(seed)
     _, n1, n2 = A.shape
+    x = _validate_mixed_strategy(x, n1, "x")
+    y = _validate_mixed_strategy(y, n2, "y")
     base = msd_profile_values(A, B, p, gamma, x, y)
     p1_payoff_by_action = np.einsum("kij,j->ki", A, y)
     p2_payoff_by_action = np.einsum("i,kij->kj", x, B)
@@ -145,8 +162,8 @@ def full_msd_regret(A_list, B_list, p, gamma: float, x, y, n_starts: int = 20, s
 
     best1 = _maximize_on_simplex(p1_dev_value, n1, rng, n_starts=n_starts)
     best2 = _maximize_on_simplex(p2_dev_value, n2, rng, n_starts=n_starts)
-    current1 = p1_dev_value(np.asarray(x, dtype=float))
-    current2 = p2_dev_value(np.asarray(y, dtype=float))
+    current1 = p1_dev_value(x)
+    current2 = p2_dev_value(y)
     best1["value"] = max(best1["value"], current1)
     best2["value"] = max(best2["value"], current2)
     regret1 = max(0.0, best1["value"] - base["rho1"])
@@ -178,6 +195,8 @@ def full_cvar_regret(
     A, B, p = normalize_game_inputs(A_list, B_list, p)
     rng = np.random.default_rng(seed)
     _, n1, n2 = A.shape
+    x = _validate_mixed_strategy(x, n1, "x")
+    y = _validate_mixed_strategy(y, n2, "y")
     base = cvar_profile_values(A, B, p, gamma, alpha, x, y)
     p1_payoff_by_action = np.einsum("kij,j->ki", A, y)
     p2_payoff_by_action = np.einsum("i,kij->kj", x, B)
@@ -190,8 +209,8 @@ def full_cvar_regret(
 
     best1 = _maximize_on_simplex(p1_dev_value, n1, rng, n_starts=n_starts)
     best2 = _maximize_on_simplex(p2_dev_value, n2, rng, n_starts=n_starts)
-    current1 = p1_dev_value(np.asarray(x, dtype=float))
-    current2 = p2_dev_value(np.asarray(y, dtype=float))
+    current1 = p1_dev_value(x)
+    current2 = p2_dev_value(y)
     best1["value"] = max(best1["value"], current1)
     best2["value"] = max(best2["value"], current2)
     regret1 = max(0.0, best1["value"] - base["rho1"])
@@ -472,6 +491,8 @@ def _certified_search(
                         candidate_index=idx,
                         metadata=candidate,
                     )
+        except ValueError:
+            raise
         except Exception as exc:  # pragma: no cover - depends on numerical optimizer failures
             best_error = str(exc)
             continue
