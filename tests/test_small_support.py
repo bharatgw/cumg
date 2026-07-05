@@ -7,6 +7,7 @@ from cumg.small_support import (
     _search_with_solver,
     candidate_support_pairs,
     expand_support_probs,
+    full_cvar_regret,
     full_msd_regret,
     restricted_profile_gap_msd,
     sample_supports,
@@ -85,6 +86,41 @@ def test_full_msd_regret_is_zero_for_dominant_action_profile():
     )
 
     assert cert["eta"] == pytest.approx(0.0, abs=1e-8)
+
+
+def test_full_msd_regret_lp_finds_mixed_best_response():
+    A = [np.array([[1.0], [-1.0]]), np.array([[-1.0], [1.0]])]
+    B = [np.zeros((2, 1)), np.zeros((2, 1))]
+
+    cert = full_msd_regret(
+        A,
+        B,
+        np.array([0.5, 0.5]),
+        gamma=1.0,
+        x=np.array([1.0, 0.0]),
+        y=np.array([1.0]),
+    )
+
+    assert cert["regret1"] == pytest.approx(0.5, abs=1e-8)
+    np.testing.assert_allclose(cert["best_dev1"]["strategy"], np.array([0.5, 0.5]), atol=1e-8)
+
+
+def test_full_cvar_regret_lp_finds_mixed_best_response():
+    A = [np.array([[1.0], [-1.0]]), np.array([[-1.0], [1.0]])]
+    B = [np.zeros((2, 1)), np.zeros((2, 1))]
+
+    cert = full_cvar_regret(
+        A,
+        B,
+        np.array([0.5, 0.5]),
+        gamma=1.0,
+        alpha=0.5,
+        x=np.array([1.0, 0.0]),
+        y=np.array([1.0]),
+    )
+
+    assert cert["regret1"] == pytest.approx(1.0, abs=1e-8)
+    np.testing.assert_allclose(cert["best_dev1"]["strategy"], np.array([0.5, 0.5]), atol=1e-8)
 
 
 def test_restricted_profile_gap_msd_returns_screen_certificate():

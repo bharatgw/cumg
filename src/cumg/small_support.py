@@ -9,7 +9,7 @@ from time import perf_counter
 from typing import Any
 
 import numpy as np
-from scipy.optimize import minimize
+from scipy.optimize import linprog, minimize
 
 from .cvar import cvar_profile_values, cvar_value_from_state_payoffs
 from .msd import msd_profile_values, msd_value_from_state_payoffs
@@ -96,12 +96,6 @@ def _restricted_data(A, B, p, S, T):
     return A_sub, B_sub, p_sub, p1_support, p2_support, scenario_support
 
 
-def _simplex_starts(dim: int, rng: np.random.Generator, n_random: int):
-    starts = [np.ones(dim) / dim]
-    starts.extend(rng.dirichlet(np.ones(dim), size=n_random))
-    return starts
-
-
 def _validate_mixed_strategy(strategy, n: int, name: str, atol: float = 1e-6) -> np.ndarray:
     strategy = np.asarray(strategy, dtype=float)
     if strategy.shape != (n,):
@@ -117,28 +111,111 @@ def _validate_mixed_strategy(strategy, n: int, name: str, atol: float = 1e-6) ->
     return strategy / strategy.sum()
 
 
-def _maximize_on_simplex(
-    objective: Callable[[np.ndarray], float],
-    dim: int,
-    rng: np.random.Generator,
-    n_starts: int = 20,
-    maxiter: int = 1000,
+def _strategy_from_lp_result(res, dim: int) -> np.ndarray:
+    strategy = np.asarray(res.x[:dim], dtype=float)
+    strategy[np.abs(strategy) <= 1e-12] = 0.0
+    strategy = np.maximum(strategy, 0.0)
+    total = float(strategy.sum())
+    if total <= 0.0:
+        raise RuntimeError("LP best response returned a zero strategy.")
+    return strategy / total
+
+
+def _lp_best_response_from_result(res, dim: int, value_fn: Callable[[np.ndarray], float]) -> dict[str, Any]:
+    if not res.success:
+        raise RuntimeError(f"LP best response failed: {res.message}")
+    strategy = _strategy_from_lp_result(res, dim)
+    return {
+        "value": float(value_fn(strategy)),
+        "strategy": strategy,
+        "success": bool(res.success),
+        "message": res.message,
+    }
+
+
+def _maximize_linear_on_simplex(payoff_by_action: np.ndarray) -> dict[str, Any]:
+    payoff_by_action = np.asarray(payoff_by_action, dtype=float)
+    dim = payoff_by_action.shape[0]
+    res = linprog(
+        -payoff_by_action,
+        A_eq=np.ones((1, dim)),
+        b_eq=np.array([1.0]),
+        bounds=[(0.0, 1.0)] * dim,
+        method="highs",
+    )
+    return _lp_best_response_from_result(res, dim, lambda q: float(payoff_by_action @ q))
+
+
+def _maximize_msd_on_simplex(payoff_by_action: np.ndarray, p: np.ndarray, gamma: float) -> dict[str, Any]:
+    payoff_by_action = np.asarray(payoff_by_action, dtype=float)
+    p = np.asarray(p, dtype=float)
+    n_states, dim = payoff_by_action.shape
+    expected_payoff_by_action = p @ payoff_by_action
+
+    if gamma <= 1e-12:
+        return _maximize_linear_on_simplex(expected_payoff_by_action)
+
+    # Variables are [strategy, downside]. At optimum downside[k] is
+    # min(0, state_payoff[k] - mean_payoff).
+    c = np.concatenate([-expected_payoff_by_action, -gamma * p])
+    A_ub = np.zeros((n_states, dim + n_states), dtype=float)
+    A_ub[:, :dim] = expected_payoff_by_action - payoff_by_action
+    A_ub[:, dim:] = np.eye(n_states)
+    b_ub = np.zeros(n_states, dtype=float)
+    A_eq = np.zeros((1, dim + n_states), dtype=float)
+    A_eq[0, :dim] = 1.0
+    bounds = [(0.0, 1.0)] * dim + [(None, 0.0)] * n_states
+
+    res = linprog(c, A_ub=A_ub, b_ub=b_ub, A_eq=A_eq, b_eq=np.array([1.0]), bounds=bounds, method="highs")
+    return _lp_best_response_from_result(
+        res,
+        dim,
+        lambda q: msd_value_from_state_payoffs(payoff_by_action @ q, p, gamma),
+    )
+
+
+def _maximize_cvar_on_simplex(
+    payoff_by_action: np.ndarray,
+    p: np.ndarray,
+    gamma: float,
+    alpha: float,
 ) -> dict[str, Any]:
-    best = None
-    constraints = [{"type": "eq", "fun": lambda v: np.sum(v) - 1.0}]
-    bounds = [(0.0, 1.0)] * dim
-    for start in _simplex_starts(dim, rng, max(0, n_starts - 1)):
-        res = minimize(
-            lambda v: -objective(v),
-            start,
-            method="SLSQP",
-            bounds=bounds,
-            constraints=constraints,
-            options={"ftol": 1e-10, "maxiter": maxiter, "disp": False},
-        )
-        value = objective(res.x)
-        if best is None or value > best["value"]:
-            best = {"value": float(value), "strategy": res.x, "success": bool(res.success), "message": res.message}
+    payoff_by_action = np.asarray(payoff_by_action, dtype=float)
+    p = np.asarray(p, dtype=float)
+    n_states, dim = payoff_by_action.shape
+    expected_payoff_by_action = p @ payoff_by_action
+
+    if gamma <= 1e-12:
+        return _maximize_linear_on_simplex(expected_payoff_by_action)
+
+    # Variables are [strategy, eta, tail_shortfall]. This is the LP form of
+    # gamma * lower-tail CVaR_alpha(state_payoff).
+    cap = gamma * p / alpha
+    c = np.concatenate([-(1.0 - gamma) * expected_payoff_by_action, np.array([-gamma]), cap])
+    A_ub = np.zeros((n_states, dim + 1 + n_states), dtype=float)
+    A_ub[:, :dim] = -payoff_by_action
+    A_ub[:, dim] = 1.0
+    A_ub[:, dim + 1 :] = -np.eye(n_states)
+    b_ub = np.zeros(n_states, dtype=float)
+    A_eq = np.zeros((1, dim + 1 + n_states), dtype=float)
+    A_eq[0, :dim] = 1.0
+    bounds = [(0.0, 1.0)] * dim + [(None, None)] + [(0.0, None)] * n_states
+
+    res = linprog(c, A_ub=A_ub, b_ub=b_ub, A_eq=A_eq, b_eq=np.array([1.0]), bounds=bounds, method="highs")
+    return _lp_best_response_from_result(
+        res,
+        dim,
+        lambda q: cvar_value_from_state_payoffs(payoff_by_action @ q, p, gamma, alpha),
+    )
+
+
+def _keep_current_strategy_if_better(best: dict[str, Any], strategy: np.ndarray, value: float) -> dict[str, Any]:
+    if value > best["value"]:
+        return best | {
+            "value": float(value),
+            "strategy": strategy,
+            "message": "Current profile matched LP value safeguard.",
+        }
     return best
 
 
@@ -146,7 +223,6 @@ def full_msd_regret(A_list, B_list, p, gamma: float, x, y, n_starts: int = 20, s
     """Compute max MSD best-response gain for a mixed profile."""
 
     A, B, p = normalize_game_inputs(A_list, B_list, p)
-    rng = np.random.default_rng(seed)
     _, n1, n2 = A.shape
     x = _validate_mixed_strategy(x, n1, "x")
     y = _validate_mixed_strategy(y, n2, "y")
@@ -160,12 +236,12 @@ def full_msd_regret(A_list, B_list, p, gamma: float, x, y, n_starts: int = 20, s
     def p2_dev_value(y_dev):
         return msd_value_from_state_payoffs(np.einsum("j,kj->k", y_dev, p2_payoff_by_action), p, gamma)
 
-    best1 = _maximize_on_simplex(p1_dev_value, n1, rng, n_starts=n_starts)
-    best2 = _maximize_on_simplex(p2_dev_value, n2, rng, n_starts=n_starts)
+    best1 = _maximize_msd_on_simplex(p1_payoff_by_action, p, gamma)
+    best2 = _maximize_msd_on_simplex(p2_payoff_by_action, p, gamma)
     current1 = p1_dev_value(x)
     current2 = p2_dev_value(y)
-    best1["value"] = max(best1["value"], current1)
-    best2["value"] = max(best2["value"], current2)
+    best1 = _keep_current_strategy_if_better(best1, x, current1)
+    best2 = _keep_current_strategy_if_better(best2, y, current2)
     regret1 = max(0.0, best1["value"] - base["rho1"])
     regret2 = max(0.0, best2["value"] - base["rho2"])
     return {
@@ -193,7 +269,6 @@ def full_cvar_regret(
     """Compute max CVaR best-response gain for a mixed profile."""
 
     A, B, p = normalize_game_inputs(A_list, B_list, p)
-    rng = np.random.default_rng(seed)
     _, n1, n2 = A.shape
     x = _validate_mixed_strategy(x, n1, "x")
     y = _validate_mixed_strategy(y, n2, "y")
@@ -207,12 +282,12 @@ def full_cvar_regret(
     def p2_dev_value(y_dev):
         return cvar_value_from_state_payoffs(np.einsum("j,kj->k", y_dev, p2_payoff_by_action), p, gamma, alpha)
 
-    best1 = _maximize_on_simplex(p1_dev_value, n1, rng, n_starts=n_starts)
-    best2 = _maximize_on_simplex(p2_dev_value, n2, rng, n_starts=n_starts)
+    best1 = _maximize_cvar_on_simplex(p1_payoff_by_action, p, gamma, alpha)
+    best2 = _maximize_cvar_on_simplex(p2_payoff_by_action, p, gamma, alpha)
     current1 = p1_dev_value(x)
     current2 = p2_dev_value(y)
-    best1["value"] = max(best1["value"], current1)
-    best2["value"] = max(best2["value"], current2)
+    best1 = _keep_current_strategy_if_better(best1, x, current1)
+    best2 = _keep_current_strategy_if_better(best2, y, current2)
     regret1 = max(0.0, best1["value"] - base["rho1"])
     regret2 = max(0.0, best2["value"] - base["rho2"])
     return {
