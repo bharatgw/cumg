@@ -4,6 +4,7 @@ import pytest
 
 from cumgSolver import build_msd_mcp_model, solve_msd_mcp
 from cumgSolver.cvar import build_cvar_mcp_model
+from cumgSolver.mcp import solve_pyomo_mcp_model
 
 
 def demo_game():
@@ -26,6 +27,8 @@ def test_build_msd_mcp_model_has_expected_sets():
     assert len(model.I) == 2
     assert len(model.J) == 2
     assert len(model.K) == 2
+    assert pyo.value(model.gamma) == pytest.approx(0.8)
+    assert pyo.value(model.p[0]) == pytest.approx(0.5)
 
 
 def test_build_cvar_mcp_model_has_expected_sets():
@@ -36,6 +39,29 @@ def test_build_cvar_mcp_model_has_expected_sets():
     assert len(model.I) == 2
     assert len(model.J) == 2
     assert len(model.K) == 2
+    assert pyo.value(model.alpha) == pytest.approx(0.5)
+
+
+def test_build_msd_mcp_model_rejects_negative_gamma():
+    A, B, p = demo_game()
+
+    with pytest.raises(ValueError, match="gamma"):
+        build_msd_mcp_model(A, B, p, gamma=-0.1)
+
+
+def test_build_cvar_mcp_model_rejects_invalid_alpha():
+    A, B, p = demo_game()
+
+    with pytest.raises(ValueError, match="alpha"):
+        build_cvar_mcp_model(A, B, p, gamma=0.5, alpha=1.5)
+
+
+def test_solve_pyomo_mcp_model_reports_missing_solvers():
+    A, B, p = demo_game()
+    model = build_msd_mcp_model(A, B, p, gamma=0.8)
+
+    with pytest.raises(RuntimeError, match="No available solver found"):
+        solve_pyomo_mcp_model(model, solver="definitely_not_a_solver", fallback_solver=None)
 
 
 @pytest.mark.solver
@@ -54,4 +80,3 @@ def test_solve_msd_mcp_with_available_solver():
     assert np.isfinite(result.alpha2)
     assert result.x.sum() == pytest.approx(1.0, abs=1e-5)
     assert result.y.sum() == pytest.approx(1.0, abs=1e-5)
-
