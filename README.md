@@ -90,9 +90,8 @@ ruff format --check src tests examples
 
 Solver-gated tests are marked with `pytest.mark.solver` and skip when PATH/PATHAMPL or IPOPT is unavailable.
 
-## Citation
-
 <!-- TODO: Replace this placeholder with the final paper citation once DOI/arXiv/venue details are available.
+## Citation
 
 If you use `cumgSolver` in academic work, please cite the associated paper:
 
