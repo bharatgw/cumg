@@ -4,7 +4,7 @@ from .cvar import build_cvar_mcp_model, solve_cvar_mcp
 from .mcp import solve_pyomo_mcp_model
 from .msd import build_msd_mcp_model, solve_msd_mcp
 from .results import SolverConfig, SolverResult, SupportSearchConfig, SupportSearchResult
-from .small_support import small_support_search_cvar, small_support_search_msd
+from .small_support import full_cvar_regret, full_msd_regret, small_support_search_cvar, small_support_search_msd
 
 __all__ = [
     "SolverConfig",
@@ -13,10 +13,11 @@ __all__ = [
     "SupportSearchResult",
     "build_cvar_mcp_model",
     "build_msd_mcp_model",
+    "full_cvar_regret",
+    "full_msd_regret",
     "small_support_search_cvar",
     "small_support_search_msd",
     "solve_cvar_mcp",
     "solve_msd_mcp",
     "solve_pyomo_mcp_model",
 ]
-

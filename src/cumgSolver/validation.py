@@ -5,6 +5,24 @@ from __future__ import annotations
 import numpy as np
 
 
+def normalize_probabilities(p, K: int | None = None) -> np.ndarray:
+    """Return a finite probability vector normalized to sum to one."""
+
+    probs = np.asarray(p, dtype=float)
+    if K is not None and probs.shape != (K,):
+        raise ValueError(f"p must have shape ({K},); got {probs.shape}.")
+    if probs.ndim != 1:
+        raise ValueError("p must be a one-dimensional probability vector.")
+    if not np.all(np.isfinite(probs)):
+        raise ValueError("p must contain finite probabilities.")
+    if np.any(probs < 0):
+        raise ValueError("p must contain nonnegative probabilities.")
+    total = float(probs.sum())
+    if not np.isfinite(total) or total <= 0:
+        raise ValueError("p must have positive total mass and all probabilities must be finite.")
+    return probs / total
+
+
 def normalize_game_inputs(
     A_list: list[np.ndarray] | np.ndarray,
     B_list: list[np.ndarray] | np.ndarray,
@@ -14,6 +32,8 @@ def normalize_game_inputs(
 
     A = np.asarray(A_list, dtype=float)
     B = np.asarray(B_list, dtype=float)
+    if not np.all(np.isfinite(A)) or not np.all(np.isfinite(B)):
+        raise ValueError("A_list and B_list must contain finite payoff values.")
     if A.ndim == 2:
         A = A[None, :, :]
     if B.ndim == 2:
@@ -29,15 +49,7 @@ def normalize_game_inputs(
     if p is None:
         probs = np.ones(K, dtype=float) / K
     else:
-        probs = np.asarray(p, dtype=float)
-        if probs.shape != (K,):
-            raise ValueError(f"p must have shape ({K},); got {probs.shape}.")
-        if np.any(probs < 0):
-            raise ValueError("p must contain nonnegative probabilities.")
-        total = float(probs.sum())
-        if total <= 0:
-            raise ValueError("p must have positive total mass.")
-        probs = probs / total
+        probs = normalize_probabilities(p, K)
     return A, B, probs
 
 
@@ -45,4 +57,3 @@ def as_matrix_lists(A: np.ndarray, B: np.ndarray) -> tuple[list[np.ndarray], lis
     """Convert normalized payoff arrays to lists of scenario matrices."""
 
     return [A[k] for k in range(A.shape[0])], [B[k] for k in range(B.shape[0])]
-

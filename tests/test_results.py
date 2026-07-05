@@ -44,4 +44,3 @@ def test_support_search_result_defaults_to_unsolved_payload():
     assert result.y is None
     assert result.support is None
     assert result.best_error == "no candidates"
-

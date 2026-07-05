@@ -4,7 +4,11 @@ import pytest
 from cumgSolver.cvar import cvar_tail_weights, cvar_value_from_state_payoffs
 from cumgSolver.msd import msd_value_from_state_payoffs
 from cumgSolver.mystic_seed import fb
-from cumgSolver.small_support import expand_support_probs, sample_supports, support_sizes
+from cumgSolver.small_support import (
+    expand_support_probs,
+    sample_supports,
+    support_sizes,
+)
 from cumgSolver.validation import normalize_game_inputs
 
 
@@ -35,16 +39,19 @@ def test_support_helpers():
     supports = sample_supports(4, 2, rng)
     expanded = expand_support_probs(np.array([0.25, 0.75]), supports[0], 4)
 
+    exp = np.zeros(4)
+    exp[list(supports[0])] = [0.25, 0.75]
+
     assert len(supports) == 6
-    assert expanded.sum() == pytest.approx(1.0)
+    assert expanded == pytest.approx(exp)
     assert support_sizes(30, 10) == (4, 6)
 
 
 def test_msd_value_from_state_payoffs():
-    payoffs = np.array([1.0, 3.0])
-    p = np.array([0.5, 0.5])
+    payoffs = np.array([1.0, 3.0, 4.0, 7.0, 10.0])
+    p = np.array([0.25, 0.30, 0.10, 0.30, 0.05])
 
-    assert msd_value_from_state_payoffs(payoffs, p, gamma=0.5) == pytest.approx(1.75)
+    assert msd_value_from_state_payoffs(payoffs, p, gamma=0.5) == pytest.approx(3.57625)
 
 
 def test_cvar_tail_weights_and_value():
@@ -55,4 +62,6 @@ def test_cvar_tail_weights_and_value():
 
     assert weights.sum() == pytest.approx(0.5)
     assert weights[1] > 0
-    assert cvar_value_from_state_payoffs(payoffs, p, gamma=0.5, alpha=0.5) == pytest.approx(3.75)
+    assert cvar_value_from_state_payoffs(
+        payoffs, p, gamma=0.5, alpha=0.5
+    ) == pytest.approx(3.75)

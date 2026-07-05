@@ -6,6 +6,7 @@ from time import perf_counter
 from typing import Any
 
 import pyomo.environ as pyo
+from pyomo.opt import SolverStatus, TerminationCondition
 
 
 def _solver_factory(name: str):
@@ -26,6 +27,7 @@ def solve_pyomo_mcp_model(
 
     solver_options = dict(solver_options or {})
     attempted: list[str] = []
+    failures: list[str] = []
 
     def apply_options(opt):
         for key, value in solver_options.items():
@@ -35,27 +37,38 @@ def solve_pyomo_mcp_model(
         if solver_name == "ipopt":
             pyo.TransformationFactory("mpec.simple_nonlinear").apply_to(model)
 
-    opt = _solver_factory(solver)
-    if opt is not None:
-        attempted.append(solver)
-        prepare_model_for_solver(solver)
+    def solved_successfully(result) -> bool:
+        status = result.solver.status
+        termination = result.solver.termination_condition
+        accepted_terminations = {
+            TerminationCondition.optimal,
+            TerminationCondition.locallyOptimal,
+            TerminationCondition.globallyOptimal,
+        }
+        return status == SolverStatus.ok and termination in accepted_terminations
+
+    for solver_name in [solver, fallback_solver]:
+        if solver_name is None:
+            continue
+        attempted.append(solver_name)
+        opt = _solver_factory(solver_name)
+        if opt is None:
+            failures.append(f"{solver_name}: unavailable")
+            continue
+        prepare_model_for_solver(solver_name)
         apply_options(opt)
         start = perf_counter()
         result = opt.solve(model, tee=tee)
-        return result, perf_counter() - start, solver, model
-
-    if fallback_solver is not None:
-        attempted.append(fallback_solver)
-        fallback = _solver_factory(fallback_solver)
-        if fallback is not None:
-            prepare_model_for_solver(fallback_solver)
-            apply_options(fallback)
-            start = perf_counter()
-            result = fallback.solve(model, tee=tee)
-            return result, perf_counter() - start, fallback_solver, model
+        elapsed = perf_counter() - start
+        if solved_successfully(result):
+            return result, elapsed, solver_name, model
+        failures.append(
+            f"{solver_name}: status={result.solver.status}, termination={result.solver.termination_condition}"
+        )
 
     tried = ", ".join(attempted or [solver])
+    details = "; ".join(failures)
     raise RuntimeError(
-        f"No available solver found. Tried: {tried}. Install PATH/PATHAMPL or IPOPT "
-        "and make it visible to Pyomo."
+        f"No available solver found or acceptable solution produced. Tried: {tried}. {details}. "
+        "Install PATH/PATHAMPL or IPOPT and make it visible to Pyomo."
     )

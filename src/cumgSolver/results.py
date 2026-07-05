@@ -61,9 +61,13 @@ class SupportSearchConfig:
     """Configuration for randomized small-support screening."""
 
     epsilon: float = 1e-3
+    epsilon_scr: float | None = None
     kappa: int = 2
     tau: int = 10
     max_candidates: int = 100
+    n_screen_starts: int = 1
+    n_regret_starts: int = 20
+    screen_maxiter: int = 300
     seed: int = 0
     solver: str = "pathampl"
     fallback_solver: str | None = "ipopt"
@@ -78,9 +82,8 @@ class SupportSearchResult:
     x: np.ndarray | None = None
     y: np.ndarray | None = None
     support: tuple[tuple[int, ...], tuple[int, ...]] | None = None
-    scenarios: tuple[int, ...] | None = None
+    scenarios: tuple[int, ...] | tuple[tuple[int, ...], tuple[int, ...]] | None = None
     candidate_index: int | None = None
     solver_result: SolverResult | None = None
     best_error: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
-
