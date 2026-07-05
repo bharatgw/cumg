@@ -43,6 +43,19 @@ The package does not vendor PATH, PATHAMPL, IPOPT, or other solver binaries. Ins
 - IPOPT can be used as a fallback through Pyomo's `mpec.simple_nonlinear` transform.
 - Solver-dependent tests and examples skip or fail clearly when no solver is available.
 
+Solver installation references:
+
+- Pyomo solver setup: [Pyomo installation guide](https://pyomo.readthedocs.io/en/stable/installation.html).
+- PATH/PATHAMPL: [PATH solver download and license notes](https://pages.cs.wisc.edu/~ferris/path.html).
+- AMPL/PATHAMPL environment setup: [AMPL Community Edition download instructions](https://ampl.com/ce/).
+- IPOPT: [COIN-OR Ipopt installation guide](https://coin-or.github.io/Ipopt/INSTALL.html).
+
+For a conda-based IPOPT setup:
+
+```bash
+conda install -c conda-forge ipopt
+```
+
 To check whether your current Python environment can see those executables:
 
 ```python
