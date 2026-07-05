@@ -62,6 +62,4 @@ def test_cvar_tail_weights_and_value():
 
     assert weights.sum() == pytest.approx(0.5)
     assert weights[1] > 0
-    assert cvar_value_from_state_payoffs(
-        payoffs, p, gamma=0.5, alpha=0.5
-    ) == pytest.approx(3.75)
+    assert cvar_value_from_state_payoffs(payoffs, p, gamma=0.5, alpha=0.5) == pytest.approx(3.75)
