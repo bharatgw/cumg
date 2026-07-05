@@ -1,0 +1,64 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cumgSolver"
+version = "0.1.0"
+description = "MCP-based solvers for risk-aware complete-uncertainty matrix games."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [{ name = "Bharat Gangwani" }]
+keywords = ["game theory", "complementarity", "MCP", "CVaR", "mean semi-deviation"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: Mathematics",
+]
+dependencies = [
+  "numpy>=1.23",
+  "pyomo>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=7",
+  "ruff>=0.5",
+]
+mystic = [
+  "mystic>=0.4",
+]
+notebooks = [
+  "jupyterlab>=4",
+  "matplotlib>=3.7",
+  "pandas>=2",
+  "tqdm>=4",
+]
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+include-package-data = false
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["cumgSolver*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+  "solver: tests that require an external MCP/NLP solver such as PATH/PATHAMPL or IPOPT",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
