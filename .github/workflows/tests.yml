@@ -49,7 +49,8 @@ jobs:
       - name: Install package
         shell: bash -el {0}
         run: |
-          conda install -y ipopt
+          conda install -y pip ipopt
+          python -m pip install --upgrade pip
           python -m pip install -e ".[dev]"
           python -c "import pyomo.environ as pyo; assert pyo.SolverFactory('ipopt').available(False)"
 
