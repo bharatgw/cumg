@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from cumgSolver import build_msd_mcp_model, solve_msd_mcp
+from cumgSolver import build_msd_mcp_model, format_solver_availability, solve_msd_mcp
 
 
 def main() -> None:
@@ -19,6 +19,7 @@ def main() -> None:
 
     model = build_msd_mcp_model(A, B, p, gamma)
     print(f"Built MSD MCP with {len(model.I)}x{len(model.J)} actions and {len(model.K)} scenarios.")
+    print("Solver status:", format_solver_availability())
 
     try:
         result = solve_msd_mcp(A, B, p, gamma, solver="pathampl", fallback_solver="ipopt")
