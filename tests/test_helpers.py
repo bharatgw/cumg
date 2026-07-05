@@ -1,15 +1,15 @@
 import numpy as np
 import pytest
 
-from cumgSolver.cvar import cvar_tail_weights, cvar_value_from_state_payoffs
-from cumgSolver.msd import msd_value_from_state_payoffs
-from cumgSolver.mystic_seed import fb
-from cumgSolver.small_support import (
+from cumg.cvar import cvar_tail_weights, cvar_value_from_state_payoffs
+from cumg.msd import msd_value_from_state_payoffs
+from cumg.mystic_seed import fb
+from cumg.small_support import (
     expand_support_probs,
     sample_supports,
     support_sizes,
 )
-from cumgSolver.validation import normalize_game_inputs
+from cumg.validation import normalize_game_inputs
 
 
 def test_normalize_game_inputs_normalizes_probabilities():

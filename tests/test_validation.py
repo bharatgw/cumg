@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from cumgSolver.validation import as_matrix_lists, normalize_game_inputs
+from cumg.validation import as_matrix_lists, normalize_game_inputs
 
 
 def test_normalize_game_inputs_accepts_single_matrix_and_default_probabilities():

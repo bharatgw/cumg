@@ -2,9 +2,9 @@ import numpy as np
 import pyomo.environ as pyo
 import pytest
 
-from cumgSolver import build_msd_mcp_model, solve_msd_mcp
-from cumgSolver.cvar import build_cvar_mcp_model
-from cumgSolver.mcp import solve_pyomo_mcp_model
+from cumg import build_msd_mcp_model, solve_msd_mcp
+from cumg.cvar import build_cvar_mcp_model
+from cumg.mcp import solve_pyomo_mcp_model
 
 
 def demo_game():

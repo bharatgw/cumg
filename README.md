@@ -1,4 +1,4 @@
-# cumgSolver
+# cumg
 
 <!-- TODO
 TODO: Once the paper details are finalized:
@@ -10,7 +10,7 @@ TODO: Once the paper details are finalized:
 - Add short source docstring references only where a module implements a paper-specific formulation or algorithm.
 -->
 
-`cumgSolver` contains Python tools for solving coherent utility measure games. The library code is separated from the experiment notebooks and committed result CSVs so the package can be installed cleanly while the research workflow remains reproducible.
+`cumg` contains Python tools for solving coherent utility measure games. The library code is separated from the experiment notebooks and committed result CSVs so the package can be installed cleanly while the research workflow remains reproducible.
 
 ## What It Supports
 
@@ -46,7 +46,7 @@ The package does not vendor PATH, PATHAMPL, IPOPT, or other solver binaries. Ins
 To check whether your current Python environment can see those executables:
 
 ```python
-from cumgSolver import available_solvers, format_solver_availability
+from cumg import available_solvers, format_solver_availability
 
 print(available_solvers())
 print(format_solver_availability())
@@ -59,7 +59,7 @@ This is useful in notebooks and examples because model construction and payoff/r
 ```python
 import numpy as np
 
-from cumgSolver import build_msd_mcp_model, solve_msd_mcp
+from cumg import build_msd_mcp_model, solve_msd_mcp
 
 A = [
     np.array([[0.8, 0.1], [0.2, 0.6]]),
@@ -79,7 +79,7 @@ print(result.x, result.y)
 
 ## Repository Layout
 
-- `src/cumgSolver/`: installable package source.
+- `src/cumg/`: installable package source.
 - `tests/`: solver-free and solver-gated tests.
 - `examples/`: small runnable examples.
 - `experiments/`: reproducibility notebooks and experiment notes.
@@ -104,12 +104,12 @@ Solver-gated tests are marked with `pytest.mark.solver` and skip when PATH/PATHA
 <!-- TODO: Replace this placeholder with the final paper citation once DOI/arXiv/venue details are available.
 ## Citation
 
-If you use `cumgSolver` in academic work, please cite the associated paper:
+If you use `cumg` in academic work, please cite the associated paper:
 
 > Bharat Gangwani and Arunesh Sinha. “Paper Title.” Venue or arXiv, Year.
 
 ```bibtex
-@misc{gangwani2026cumgsolver,
+@misc{gangwani2026cumg,
   title = {Paper Title},
   author = {Gangwani, Bharat and Sinha, Arunesh},
   year = {2026},

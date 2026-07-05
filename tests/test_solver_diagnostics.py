@@ -1,4 +1,4 @@
-from cumgSolver import available_solvers, format_solver_availability, solver_available
+from cumg import available_solvers, format_solver_availability, solver_available
 
 
 def test_solver_available_reports_boolean_for_unknown_solver():

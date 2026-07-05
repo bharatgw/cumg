@@ -3,10 +3,10 @@ import pyomo.environ as pyo
 import pytest
 from sample_games import dominant_action_game, matching_pennies_game
 
-from cumgSolver import solve_msd_mcp
-from cumgSolver.cvar import solve_cvar_mcp
-from cumgSolver.results import SupportSearchConfig
-from cumgSolver.small_support import small_support_search_cvar, small_support_search_msd
+from cumg import solve_msd_mcp
+from cumg.cvar import solve_cvar_mcp
+from cumg.results import SupportSearchConfig
+from cumg.small_support import small_support_search_cvar, small_support_search_msd
 
 
 def available_solver():

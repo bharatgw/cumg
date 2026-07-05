@@ -2,10 +2,10 @@ import numpy as np
 import pytest
 from sample_games import dominant_action_game, matching_pennies_game
 
-from cumgSolver.cvar import cvar_profile_values, cvar_value_from_state_payoffs
-from cumgSolver.msd import msd_profile_values, msd_value_from_state_payoffs
-from cumgSolver.results import SupportSearchConfig
-from cumgSolver.small_support import (
+from cumg.cvar import cvar_profile_values, cvar_value_from_state_payoffs
+from cumg.msd import msd_profile_values, msd_value_from_state_payoffs
+from cumg.results import SupportSearchConfig
+from cumg.small_support import (
     full_cvar_regret,
     full_msd_regret,
     restricted_profile_gap_msd,

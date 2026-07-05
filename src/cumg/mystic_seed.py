@@ -89,7 +89,7 @@ def run_mystic_seed(A_list, B_list, p, gamma: float, maxiter: int = 2000, popsiz
         from mystic.solvers import diffev2
         from mystic.termination import ChangeOverGeneration
     except Exception as exc:  # pragma: no cover - optional dependency
-        raise RuntimeError("Install cumgSolver[mystic] to use run_mystic_seed.") from exc
+        raise RuntimeError("Install cumg[mystic] to use run_mystic_seed.") from exc
 
     A, B, p = normalize_game_inputs(A_list, B_list, p)
     K, n1, n2 = A.shape

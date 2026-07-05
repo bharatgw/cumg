@@ -1,6 +1,6 @@
 # Experiments
 
-This directory preserves the research workflows and committed outputs used while developing `cumgSolver`.
+This directory preserves the research workflows and committed outputs used while developing `cumg`.
 
 ## Contents
 
@@ -17,7 +17,7 @@ This directory preserves the research workflows and committed outputs used while
 - `results/scalabilityExperimentcVaR.csv`: CVaR scalability experiment output.
 - `results/partial/`: partial or checkpointed experiment outputs.
 
-These CSV files are intentionally tracked in git for reproducibility, but they are not package data and are not installed with `cumgSolver`.
+These CSV files are intentionally tracked in git for reproducibility, but they are not package data and are not installed with `cumg`.
 
 ## Reproducing
 

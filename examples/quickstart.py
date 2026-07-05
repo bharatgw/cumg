@@ -1,8 +1,8 @@
-"""Minimal cumgSolver example."""
+"""Minimal cumg example."""
 
 import numpy as np
 
-from cumgSolver import build_msd_mcp_model, format_solver_availability, solve_msd_mcp
+from cumg import build_msd_mcp_model, format_solver_availability, solve_msd_mcp
 
 
 def main() -> None:

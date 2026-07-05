@@ -1,8 +1,8 @@
 import numpy as np
 import pytest
 
-from cumgSolver.results import SolverResult, SupportSearchConfig
-from cumgSolver.small_support import (
+from cumg.results import SolverResult, SupportSearchConfig
+from cumg.small_support import (
     _restricted_data,
     _search_with_solver,
     candidate_support_pairs,

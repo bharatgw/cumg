@@ -1,8 +1,8 @@
 import numpy as np
 import pytest
 
-from cumgSolver.cvar import cvar_profile_values, cvar_tail_weights, cvar_value_from_state_payoffs
-from cumgSolver.msd import msd_profile_values, msd_value_from_state_payoffs
+from cumg.cvar import cvar_profile_values, cvar_tail_weights, cvar_value_from_state_payoffs
+from cumg.msd import msd_profile_values, msd_value_from_state_payoffs
 
 
 def test_msd_value_is_mean_when_gamma_is_zero():

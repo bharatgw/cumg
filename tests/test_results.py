@@ -1,6 +1,6 @@
 import numpy as np
 
-from cumgSolver.results import SolverConfig, SolverResult, SupportSearchConfig, SupportSearchResult
+from cumg.results import SolverConfig, SolverResult, SupportSearchConfig, SupportSearchResult
 
 
 def test_solver_result_as_dict_keeps_extra_fields():
