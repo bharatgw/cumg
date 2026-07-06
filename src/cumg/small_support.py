@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from inspect import Parameter, signature
 from itertools import combinations
 from math import comb
 from time import perf_counter
@@ -11,8 +12,12 @@ from typing import Any
 import numpy as np
 from scipy.optimize import linprog, minimize
 
-from .cvar import cvar_profile_values, cvar_value_from_state_payoffs
-from .msd import msd_profile_values, msd_value_from_state_payoffs
+from .cvar import (
+    cvar_profile_values,
+    cvar_value_from_state_payoffs,
+    solve_cvar_mcp,
+)
+from .msd import msd_profile_values, msd_value_from_state_payoffs, solve_msd_mcp
 from .results import SupportSearchConfig, SupportSearchResult
 from .validation import normalize_game_inputs, normalize_probabilities
 
@@ -76,6 +81,36 @@ def candidate_support_pairs(
             data_supports[int(rng.integers(len(data_supports)))],
         )
         yield S, T
+
+
+def candidate_action_support_pairs(
+    n1: int,
+    n2: int,
+    kappa: int,
+    max_candidates: int,
+    rng: np.random.Generator,
+):
+    """Yield action-support pairs without scenario supports."""
+
+    action1 = sample_supports(n1, kappa, rng, max_exact=max_candidates)
+    action2 = sample_supports(n2, kappa, rng, max_exact=max_candidates)
+    total_pairs = len(action1) * len(action2)
+    if total_pairs <= max_candidates:
+        for s1 in action1:
+            for s2 in action2:
+                yield s1, s2
+        return
+
+    seen: set[tuple[tuple[int, ...], tuple[int, ...]]] = set()
+    while len(seen) < min(max_candidates, total_pairs):
+        S = (
+            action1[int(rng.integers(len(action1)))],
+            action2[int(rng.integers(len(action2)))],
+        )
+        if S in seen:
+            continue
+        seen.add(S)
+        yield S
 
 
 def support_sizes(K: int, n: int) -> tuple[int, int]:
@@ -688,6 +723,116 @@ def supported_profile_gap_cvar(
     )
 
 
+def _restricted_action_data(A, B, S):
+    _, n1, n2 = A.shape
+    S1, S2 = tuple(S[0]), tuple(S[1])
+    if not S1 or not S2:
+        raise ValueError("Action supports must be nonempty.")
+    if any(i < 0 or i >= n1 for i in S1) or any(j < 0 or j >= n2 for j in S2):
+        raise ValueError("Action support indices must be in range.")
+    S1_idx = np.asarray(S1, dtype=int)
+    S2_idx = np.asarray(S2, dtype=int)
+    return A[:, S1_idx, :][:, :, S2_idx], B[:, S1_idx, :][:, :, S2_idx], S1, S2
+
+
+def supported_profile_gap_msd_mcp(
+    A_list,
+    B_list,
+    p,
+    gamma: float,
+    S,
+    solver: str = "pathampl",
+    fallback_solver: str | None = "ipopt",
+    solver_options: dict[str, Any] | None = None,
+    tee: bool = False,
+):
+    """Solve the full-sample restricted MSD MCP on ``S`` and certify full-game regret."""
+
+    A, B, p = normalize_game_inputs(A_list, B_list, p)
+    _, n1, n2 = A.shape
+    A_sub, B_sub, S1, S2 = _restricted_action_data(A, B, S)
+    start = perf_counter()
+    solver_result = solve_msd_mcp(
+        A_sub,
+        B_sub,
+        p,
+        gamma=gamma,
+        solver=solver,
+        fallback_solver=fallback_solver,
+        solver_options=solver_options,
+        tee=tee,
+    )
+    elapsed = perf_counter() - start
+    x_sub = _validate_mixed_strategy(solver_result.x, len(S1), "restricted x", atol=1e-5)
+    y_sub = _validate_mixed_strategy(solver_result.y, len(S2), "restricted y", atol=1e-5)
+    x = expand_support_probs(x_sub, S1, n1)
+    y = expand_support_probs(y_sub, S2, n2)
+    cert = full_msd_regret(A, B, p, gamma, x, y)
+    return {
+        "eta": float(cert["eta"]),
+        "x": x,
+        "y": y,
+        "S": (S1, S2),
+        "certificate": cert,
+        "solver_result": solver_result,
+        "restricted_x": x_sub,
+        "restricted_y": y_sub,
+        "success": bool(np.isfinite(cert["eta"])),
+        "time_s": elapsed,
+        "mcp_time_s": solver_result.solve_time_s,
+    }
+
+
+def supported_profile_gap_cvar_mcp(
+    A_list,
+    B_list,
+    p,
+    gamma: float,
+    alpha: float,
+    S,
+    solver: str = "pathampl",
+    fallback_solver: str | None = "ipopt",
+    solver_options: dict[str, Any] | None = None,
+    tee: bool = False,
+):
+    """Solve the full-sample restricted CVaR MCP on ``S`` and certify full-game regret."""
+
+    A, B, p = normalize_game_inputs(A_list, B_list, p)
+    _, n1, n2 = A.shape
+    A_sub, B_sub, S1, S2 = _restricted_action_data(A, B, S)
+    start = perf_counter()
+    solver_result = solve_cvar_mcp(
+        A_sub,
+        B_sub,
+        p,
+        gamma=gamma,
+        alpha=alpha,
+        solver=solver,
+        fallback_solver=fallback_solver,
+        solver_options=solver_options,
+        tee=tee,
+    )
+    elapsed = perf_counter() - start
+    x_sub = _validate_mixed_strategy(solver_result.x, len(S1), "restricted x", atol=1e-5)
+    y_sub = _validate_mixed_strategy(solver_result.y, len(S2), "restricted y", atol=1e-5)
+    x = expand_support_probs(x_sub, S1, n1)
+    y = expand_support_probs(y_sub, S2, n2)
+    cert = full_cvar_regret(A, B, p, gamma, alpha, x, y)
+    return {
+        "eta": float(cert["eta"]),
+        "x": x,
+        "y": y,
+        "S": (S1, S2),
+        "certificate": cert,
+        "solver_result": solver_result,
+        "restricted_x": x_sub,
+        "restricted_y": y_sub,
+        "success": bool(np.isfinite(cert["eta"])),
+        "time_s": elapsed,
+        "mcp_time_s": solver_result.solve_time_s,
+    }
+
+
 def _payoff_abs_scale(A: np.ndarray, B: np.ndarray) -> float:
     return max(1.0, float(np.max(np.abs(A))), float(np.max(np.abs(B))))
 
@@ -880,8 +1025,9 @@ def supported_profile_gap_msd_dual(
     best.update(
         {"eta": float(cert["eta"]), "x": x, "y": y, "S": (S1, S2), "certificate": cert}
     )
+    best["optimizer_success"] = best["success"]
     best["success"] = bool(
-        best["success"] and best["violation"] <= 1e-6 and np.isfinite(best["eta"])
+        best["violation"] <= 1e-6 and np.isfinite(best["eta"])
     )
     return best
 
@@ -1086,8 +1232,9 @@ def supported_profile_gap_cvar_dual(
     best.update(
         {"eta": float(cert["eta"]), "x": x, "y": y, "S": (S1, S2), "certificate": cert}
     )
+    best["optimizer_success"] = best["success"]
     best["success"] = bool(
-        best["success"] and best["violation"] <= 1e-6 and np.isfinite(best["eta"])
+        best["violation"] <= 1e-6 and np.isfinite(best["eta"])
     )
     return best
 
@@ -1199,12 +1346,166 @@ def _certified_search(
     )
 
 
+def _accepted_keyword_names(fn: Callable) -> set[str] | None:
+    try:
+        sig = signature(fn)
+    except (TypeError, ValueError):
+        return None
+    if any(param.kind == Parameter.VAR_KEYWORD for param in sig.parameters.values()):
+        return None
+    return {
+        name
+        for name, param in sig.parameters.items()
+        if param.kind in (Parameter.POSITIONAL_OR_KEYWORD, Parameter.KEYWORD_ONLY)
+    }
+
+
+def _call_support_gap(
+    support_gap_fn: Callable,
+    A,
+    B,
+    p,
+    kwargs: dict[str, Any],
+):
+    accepted = _accepted_keyword_names(support_gap_fn)
+    if accepted is not None:
+        kwargs = {key: value for key, value in kwargs.items() if key in accepted}
+    return support_gap_fn(A, B, p, **kwargs)
+
+
+def _action_support_search(
+    A_list,
+    B_list,
+    p,
+    support_gap_fn: Callable,
+    risk_kwargs: dict[str, Any],
+    config: SupportSearchConfig,
+    support_gap_kwargs: dict[str, Any] | None = None,
+):
+    A, B, p = normalize_game_inputs(A_list, B_list, p)
+    _, n1, n2 = A.shape
+    rng = np.random.default_rng(config.seed)
+    best_candidate = None
+    best_eta = np.inf
+    best_error = None
+    extra_gap_kwargs = dict(support_gap_kwargs or {})
+
+    for idx, S in enumerate(
+        candidate_action_support_pairs(n1, n2, config.kappa, config.max_candidates, rng),
+        start=1,
+    ):
+        try:
+            start = perf_counter()
+            call_kwargs = {
+                **risk_kwargs,
+                "S": S,
+                "n_starts": config.n_regret_starts,
+                "seed": config.seed + idx,
+                "solver": config.solver,
+                "fallback_solver": config.fallback_solver,
+                "solver_options": config.solver_options,
+                **extra_gap_kwargs,
+            }
+            support_cert = _call_support_gap(support_gap_fn, A, B, p, call_kwargs)
+            support_cert.setdefault("time_s", perf_counter() - start)
+            certificate = support_cert["certificate"]
+            eta = float(support_cert["eta"])
+            candidate = {
+                "support_certificate": support_cert,
+                "certificate": certificate,
+                "candidate_index": idx,
+                "success": bool(
+                    support_cert["success"] and np.isfinite(eta) and eta <= config.epsilon
+                ),
+            }
+            if eta < best_eta:
+                best_candidate = candidate
+                best_eta = eta
+            if candidate["success"]:
+                return SupportSearchResult(
+                    success=True,
+                    x=support_cert["x"],
+                    y=support_cert["y"],
+                    support=support_cert["S"],
+                    candidate_index=idx,
+                    metadata=candidate,
+                )
+        except (
+            ArithmeticError,
+            RuntimeError,
+        ) as exc:  # pragma: no cover - depends on numerical optimizer failures
+            best_error = str(exc)
+            continue
+
+    if best_candidate is not None:
+        support_cert = best_candidate["support_certificate"]
+        return SupportSearchResult(
+            success=False,
+            x=support_cert["x"],
+            y=support_cert["y"],
+            support=support_cert["S"],
+            candidate_index=best_candidate["candidate_index"],
+            best_error=best_error,
+            metadata={"best_candidate": best_candidate},
+        )
+    return SupportSearchResult(
+        success=False, best_error=best_error, metadata={"best_candidate": None}
+    )
+
+
 def _msd_regret_wrapper(A, B, p, x, y, gamma: float, **kwargs):
     return full_msd_regret(A, B, p, gamma, x, y, **kwargs)
 
 
 def _cvar_regret_wrapper(A, B, p, x, y, gamma: float, alpha: float, **kwargs):
     return full_cvar_regret(A, B, p, gamma, alpha, x, y, **kwargs)
+
+
+def small_support_action_search_msd(
+    A_list,
+    B_list,
+    p,
+    gamma: float,
+    config: SupportSearchConfig | None = None,
+    support_gap_func: Callable = supported_profile_gap_msd_dual,
+    support_gap_kwargs: dict[str, Any] | None = None,
+):
+    """Search action supports only and certify the best supported MSD profile."""
+
+    config = config or SupportSearchConfig()
+    return _action_support_search(
+        A_list,
+        B_list,
+        p,
+        support_gap_func,
+        {"gamma": gamma},
+        config,
+        support_gap_kwargs=support_gap_kwargs,
+    )
+
+
+def small_support_action_search_cvar(
+    A_list,
+    B_list,
+    p,
+    gamma: float,
+    alpha: float,
+    config: SupportSearchConfig | None = None,
+    support_gap_func: Callable = supported_profile_gap_cvar_dual,
+    support_gap_kwargs: dict[str, Any] | None = None,
+):
+    """Search action supports only and certify the best supported CVaR profile."""
+
+    config = config or SupportSearchConfig()
+    return _action_support_search(
+        A_list,
+        B_list,
+        p,
+        support_gap_func,
+        {"gamma": gamma, "alpha": alpha},
+        config,
+        support_gap_kwargs=support_gap_kwargs,
+    )
 
 
 def small_support_search_msd(

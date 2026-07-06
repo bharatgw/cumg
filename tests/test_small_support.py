@@ -11,6 +11,8 @@ from cumg.small_support import (
     full_msd_regret,
     restricted_profile_gap_msd,
     sample_supports,
+    small_support_action_search_cvar,
+    small_support_action_search_msd,
     supported_profile_gap_cvar_dual,
     supported_profile_gap_msd,
     supported_profile_gap_msd_dual,
@@ -238,3 +240,52 @@ def test_dualized_supported_profile_gap_cvar_finds_supported_equilibrium():
     assert out["eta"] == pytest.approx(0.0, abs=1e-8)
     np.testing.assert_allclose(out["x"], np.array([0.5, 0.5]), atol=1e-6)
     np.testing.assert_allclose(out["y"], np.array([0.5, 0.5]), atol=1e-6)
+
+
+def test_action_support_search_msd_with_dual_backend_finds_supported_equilibrium():
+    A = [np.array([[1.0, -1.0], [-1.0, 1.0]])]
+    B = [-A[0]]
+    config = SupportSearchConfig(
+        epsilon=1e-6,
+        kappa=2,
+        tau=0,
+        max_candidates=1,
+        n_regret_starts=1,
+        seed=0,
+    )
+
+    out = small_support_action_search_msd(A, B, np.array([1.0]), gamma=0.5, config=config)
+
+    assert out.success, out.best_error
+    assert out.scenarios is None
+    assert out.metadata["certificate"]["eta"] == pytest.approx(0.0, abs=1e-8)
+    np.testing.assert_allclose(out.x, np.array([0.5, 0.5]), atol=1e-6)
+    np.testing.assert_allclose(out.y, np.array([0.5, 0.5]), atol=1e-6)
+
+
+def test_action_support_search_cvar_with_dual_backend_finds_supported_equilibrium():
+    A = [np.array([[1.0, -1.0], [-1.0, 1.0]])]
+    B = [-A[0]]
+    config = SupportSearchConfig(
+        epsilon=1e-6,
+        kappa=2,
+        tau=0,
+        max_candidates=1,
+        n_regret_starts=1,
+        seed=0,
+    )
+
+    out = small_support_action_search_cvar(
+        A,
+        B,
+        np.array([1.0]),
+        gamma=0.5,
+        alpha=1.0,
+        config=config,
+    )
+
+    assert out.success, out.best_error
+    assert out.scenarios is None
+    assert out.metadata["certificate"]["eta"] == pytest.approx(0.0, abs=1e-8)
+    np.testing.assert_allclose(out.x, np.array([0.5, 0.5]), atol=1e-6)
+    np.testing.assert_allclose(out.y, np.array([0.5, 0.5]), atol=1e-6)

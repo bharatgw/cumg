@@ -6,7 +6,14 @@ from sample_games import dominant_action_game, matching_pennies_game
 from cumg import solve_msd_mcp
 from cumg.cvar import solve_cvar_mcp
 from cumg.results import SupportSearchConfig
-from cumg.small_support import small_support_search_cvar, small_support_search_msd
+from cumg.small_support import (
+    small_support_action_search_cvar,
+    small_support_action_search_msd,
+    small_support_search_cvar,
+    small_support_search_msd,
+    supported_profile_gap_cvar_mcp,
+    supported_profile_gap_msd_mcp,
+)
 
 
 def available_solver():
@@ -158,6 +165,90 @@ def test_small_support_cvar_matches_mcp_when_epsilon_is_near_zero(game, gamma, a
     config = full_support_search_config(kwargs, A)
 
     search_result = small_support_search_cvar(A, B, p, gamma=gamma, alpha=alpha, config=config)
+
+    assert search_result.success, search_result.best_error
+    assert search_result.metadata["certificate"]["eta"] <= config.epsilon
+    assert_profiles_match(mcp_result, search_result)
+
+
+@pytest.mark.solver
+def test_supported_profile_gap_msd_mcp_certifies_dominant_action_support():
+    A, B, p = dominant_action_game()
+    kwargs = solver_kwargs()
+
+    out = supported_profile_gap_msd_mcp(
+        A,
+        B,
+        p,
+        gamma=0.6,
+        S=((0, 1), (0, 1)),
+        solver=kwargs["solver"],
+        fallback_solver=kwargs["fallback_solver"],
+    )
+
+    assert out["success"]
+    assert out["eta"] <= 1e-6
+    assert_pure_first_action(out["x"], out["y"])
+
+
+@pytest.mark.solver
+def test_supported_profile_gap_cvar_mcp_certifies_dominant_action_support():
+    A, B, p = dominant_action_game()
+    kwargs = solver_kwargs()
+
+    out = supported_profile_gap_cvar_mcp(
+        A,
+        B,
+        p,
+        gamma=0.5,
+        alpha=0.5,
+        S=((0, 1), (0, 1)),
+        solver=kwargs["solver"],
+        fallback_solver=kwargs["fallback_solver"],
+    )
+
+    assert out["success"]
+    assert out["eta"] <= 1e-6
+    assert_pure_first_action(out["x"], out["y"])
+
+
+@pytest.mark.solver
+def test_action_support_msd_mcp_backend_matches_full_mcp_on_full_support():
+    A, B, p = dominant_action_game()
+    kwargs = solver_kwargs()
+    mcp_result = solve_msd_mcp(A, B, p, gamma=0.6, **kwargs)
+    config = full_support_search_config(kwargs, A)
+
+    search_result = small_support_action_search_msd(
+        A,
+        B,
+        p,
+        gamma=0.6,
+        config=config,
+        support_gap_func=supported_profile_gap_msd_mcp,
+    )
+
+    assert search_result.success, search_result.best_error
+    assert search_result.metadata["certificate"]["eta"] <= config.epsilon
+    assert_profiles_match(mcp_result, search_result)
+
+
+@pytest.mark.solver
+def test_action_support_cvar_mcp_backend_matches_full_mcp_on_full_support():
+    A, B, p = dominant_action_game()
+    kwargs = solver_kwargs()
+    mcp_result = solve_cvar_mcp(A, B, p, gamma=0.5, alpha=0.5, **kwargs)
+    config = full_support_search_config(kwargs, A)
+
+    search_result = small_support_action_search_cvar(
+        A,
+        B,
+        p,
+        gamma=0.5,
+        alpha=0.5,
+        config=config,
+        support_gap_func=supported_profile_gap_cvar_mcp,
+    )
 
     assert search_result.success, search_result.best_error
     assert search_result.metadata["certificate"]["eta"] <= config.epsilon

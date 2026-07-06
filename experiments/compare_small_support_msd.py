@@ -1,4 +1,4 @@
-"""Compare nested-LP and dualized support-stage MSD small-support searches."""
+"""Compare MSD small-support action-search backends."""
 
 from __future__ import annotations
 
@@ -20,9 +20,11 @@ from cumg.results import SupportSearchConfig  # noqa: E402
 from cumg.small_support import (  # noqa: E402
     _certified_search,
     restricted_profile_gap_msd,
+    small_support_action_search_msd,
     support_sizes,
     supported_profile_gap_msd,
     supported_profile_gap_msd_dual,
+    supported_profile_gap_msd_mcp,
 )
 
 
@@ -65,18 +67,22 @@ def _search_with_support_stage(
 
 
 def _candidate(result) -> dict[str, Any] | None:
+    if result is None:
+        return None
     if result.success:
         return result.metadata
-    return result.metadata.get("best_regret")
+    return result.metadata.get("best_candidate") or result.metadata.get("best_regret")
 
 
 def _method_metrics(prefix: str, result, elapsed_s: float, error: str | None = None) -> dict[str, Any]:
-    candidate = _candidate(result) if result is not None else None
+    candidate = _candidate(result)
     screen = candidate.get("screen", {}) if candidate is not None else {}
     support_cert = candidate.get("support_certificate", {}) if candidate is not None else {}
     certificate = candidate.get("certificate", support_cert.get("certificate", {})) if candidate is not None else {}
     best_dev1 = certificate.get("best_dev1", {})
     best_dev2 = certificate.get("best_dev2", {})
+    solver_result = support_cert.get("solver_result")
+    method_error = error if error is not None else (result.best_error if result is not None else None)
 
     return {
         f"{prefix}_success": bool(result.success) if result is not None else False,
@@ -88,22 +94,50 @@ def _method_metrics(prefix: str, result, elapsed_s: float, error: str | None = N
         f"{prefix}_support_eta": float(support_cert.get("eta", np.nan)),
         f"{prefix}_dual_eta": float(support_cert.get("dual_eta", np.nan)),
         f"{prefix}_support_violation": float(support_cert.get("violation", np.nan)),
+        f"{prefix}_mcp_time_s": float(support_cert.get("mcp_time_s", np.nan)),
+        f"{prefix}_solver": getattr(solver_result, "solver", None),
         f"{prefix}_candidate_index": result.candidate_index if result is not None else None,
         f"{prefix}_has_profile": result is not None and result.x is not None and result.y is not None,
         f"{prefix}_best_dev1_success": best_dev1.get("success", np.nan),
         f"{prefix}_best_dev2_success": best_dev2.get("success", np.nan),
-        f"{prefix}_error": error,
+        f"{prefix}_error": method_error,
     }
 
 
 def _run_method(name: str, A, B, p, gamma, config, support_maxiter):
-    support_gap_fn = {
-        "nested": supported_profile_gap_msd,
-        "dual": supported_profile_gap_msd_dual,
-    }[name]
     start = perf_counter()
     try:
-        result = _search_with_support_stage(A, B, p, gamma, config, support_gap_fn, support_maxiter)
+        if name == "nested":
+            result = _search_with_support_stage(
+                A,
+                B,
+                p,
+                gamma,
+                config,
+                supported_profile_gap_msd,
+                support_maxiter,
+            )
+        elif name == "dual":
+            result = small_support_action_search_msd(
+                A,
+                B,
+                p,
+                gamma,
+                config=config,
+                support_gap_func=supported_profile_gap_msd_dual,
+                support_gap_kwargs={"maxiter": support_maxiter},
+            )
+        elif name == "restricted_mcp":
+            result = small_support_action_search_msd(
+                A,
+                B,
+                p,
+                gamma,
+                config=config,
+                support_gap_func=supported_profile_gap_msd_mcp,
+            )
+        else:
+            raise ValueError(f"Unknown method: {name}")
         return result, perf_counter() - start, None
     except Exception as exc:  # pragma: no cover - experiment diagnostics
         return None, perf_counter() - start, str(exc)
@@ -122,12 +156,9 @@ def run_instance(args, K: int, n: int, seed: int) -> dict[str, Any]:
         n_regret_starts=args.n_support_starts,
         screen_maxiter=args.screen_maxiter,
         seed=seed,
+        solver=args.solver,
+        fallback_solver=args.fallback_solver,
     )
-
-    nested_result, nested_time, nested_error = _run_method(
-        "nested", A, B, p, args.gamma, config, args.support_maxiter
-    )
-    dual_result, dual_time, dual_error = _run_method("dual", A, B, p, args.gamma, config, args.support_maxiter)
 
     row: dict[str, Any] = {
         "K": K,
@@ -143,26 +174,38 @@ def run_instance(args, K: int, n: int, seed: int) -> dict[str, Any]:
         "n_support_starts": args.n_support_starts,
         "screen_maxiter": args.screen_maxiter,
         "support_maxiter": args.support_maxiter,
+        "methods": ",".join(args.methods),
     }
-    row.update(_method_metrics("nested", nested_result, nested_time, nested_error))
-    row.update(_method_metrics("dual", dual_result, dual_time, dual_error))
+    results = {}
+    for method in args.methods:
+        result, elapsed, error = _run_method(method, A, B, p, args.gamma, config, args.support_maxiter)
+        results[method] = result
+        row.update(_method_metrics(method, result, elapsed, error))
 
-    if (
-        nested_result is not None
-        and dual_result is not None
-        and nested_result.x is not None
-        and dual_result.x is not None
-    ):
-        row["x_l1_dual_minus_nested"] = float(np.sum(np.abs(dual_result.x - nested_result.x)))
-        row["y_l1_dual_minus_nested"] = float(np.sum(np.abs(dual_result.y - nested_result.y)))
-    else:
-        row["x_l1_dual_minus_nested"] = np.nan
-        row["y_l1_dual_minus_nested"] = np.nan
+    if "dual" in args.methods and "restricted_mcp" in args.methods:
+        row["eta_diff_mcp_minus_dual"] = row["restricted_mcp_eta"] - row["dual_eta"]
+        row["time_ratio_mcp_over_dual"] = (
+            row["restricted_mcp_time_s"] / row["dual_time_s"] if row["dual_time_s"] > 0 else np.nan
+        )
+        dual_result = results["dual"]
+        mcp_result = results["restricted_mcp"]
+        if (
+            dual_result is not None
+            and mcp_result is not None
+            and dual_result.x is not None
+            and mcp_result.x is not None
+        ):
+            row["x_l1_mcp_minus_dual"] = float(np.sum(np.abs(mcp_result.x - dual_result.x)))
+            row["y_l1_mcp_minus_dual"] = float(np.sum(np.abs(mcp_result.y - dual_result.y)))
+        else:
+            row["x_l1_mcp_minus_dual"] = np.nan
+            row["y_l1_mcp_minus_dual"] = np.nan
 
-    row["eta_diff_dual_minus_nested"] = row["dual_eta"] - row["nested_eta"]
-    row["time_ratio_dual_over_nested"] = (
-        row["dual_time_s"] / row["nested_time_s"] if row["nested_time_s"] > 0 else np.nan
-    )
+    if "dual" in args.methods and "nested" in args.methods:
+        row["eta_diff_dual_minus_nested"] = row["dual_eta"] - row["nested_eta"]
+        row["time_ratio_dual_over_nested"] = (
+            row["dual_time_s"] / row["nested_time_s"] if row["nested_time_s"] > 0 else np.nan
+        )
     return row
 
 
@@ -171,31 +214,35 @@ def _finite_values(rows: list[dict[str, Any]], key: str) -> np.ndarray:
     return vals[np.isfinite(vals)]
 
 
-def print_summary(rows: list[dict[str, Any]]) -> None:
+def print_summary(rows: list[dict[str, Any]], methods: list[str]) -> None:
     print("\nSummary")
     print("-------")
-    for prefix in ("nested", "dual"):
+    for prefix in methods:
         success = np.array([bool(row[f"{prefix}_success"]) for row in rows], dtype=float)
         times = _finite_values(rows, f"{prefix}_time_s")
         etas = _finite_values(rows, f"{prefix}_eta")
         violations = _finite_values(rows, f"{prefix}_support_violation")
+        time_text = f"{np.median(times):.4g}s" if times.size else "nan"
+        eta_text = f"{np.median(etas):.4g}" if etas.size else "nan"
+        violation_text = f"{np.median(violations):.4g}" if violations.size else "nan"
         print(
-            f"{prefix:>6}: success_rate={success.mean():.3f}, "
-            f"median_time={np.median(times):.4g}s, "
-            f"median_eta={np.median(etas):.4g}, "
-            f"median_support_violation={np.median(violations):.4g}"
+            f"{prefix:>14}: success_rate={success.mean():.3f}, "
+            f"median_time={time_text}, "
+            f"median_eta={eta_text}, "
+            f"median_support_violation={violation_text}"
         )
 
-    ratios = _finite_values(rows, "time_ratio_dual_over_nested")
-    eta_diffs = _finite_values(rows, "eta_diff_dual_minus_nested")
-    x_diffs = _finite_values(rows, "x_l1_dual_minus_nested")
-    y_diffs = _finite_values(rows, "y_l1_dual_minus_nested")
-    if ratios.size:
-        print(f"dual/nested median time ratio: {np.median(ratios):.4g}")
-    if eta_diffs.size:
-        print(f"median eta difference, dual - nested: {np.median(eta_diffs):.4g}")
-    if x_diffs.size and y_diffs.size:
-        print(f"median strategy L1 difference: x={np.median(x_diffs):.4g}, y={np.median(y_diffs):.4g}")
+    if "dual" in methods and "restricted_mcp" in methods:
+        ratios = _finite_values(rows, "time_ratio_mcp_over_dual")
+        eta_diffs = _finite_values(rows, "eta_diff_mcp_minus_dual")
+        x_diffs = _finite_values(rows, "x_l1_mcp_minus_dual")
+        y_diffs = _finite_values(rows, "y_l1_mcp_minus_dual")
+        if ratios.size:
+            print(f"restricted_mcp/dual median time ratio: {np.median(ratios):.4g}")
+        if eta_diffs.size:
+            print(f"median eta difference, restricted_mcp - dual: {np.median(eta_diffs):.4g}")
+        if x_diffs.size and y_diffs.size:
+            print(f"median strategy L1 difference: x={np.median(x_diffs):.4g}, y={np.median(y_diffs):.4g}")
 
 
 def write_csv(rows: list[dict[str, Any]], path: Path) -> None:
@@ -221,6 +268,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--n-support-starts", type=int, default=5)
     parser.add_argument("--screen-maxiter", type=int, default=300)
     parser.add_argument("--support-maxiter", type=int, default=500)
+    parser.add_argument(
+        "--methods",
+        nargs="+",
+        choices=["dual", "restricted_mcp", "nested"],
+        default=["dual", "restricted_mcp"],
+    )
+    parser.add_argument("--solver", default="pathampl")
+    parser.add_argument("--fallback-solver", default="ipopt")
     parser.add_argument("--low", type=float, default=0.0)
     parser.add_argument("--high", type=float, default=1.0)
     parser.add_argument("--csv", type=Path, default=None)
@@ -228,6 +283,8 @@ def parse_args() -> argparse.Namespace:
     args = parser.parse_args()
     if args.epsilon_scr is None:
         args.epsilon_scr = 2.0 * args.epsilon / 3.0
+    if args.fallback_solver.lower() == "none":
+        args.fallback_solver = None
     return args
 
 
@@ -241,15 +298,14 @@ def main() -> None:
                 row = run_instance(args, K, n, seed)
                 rows.append(row)
                 if not args.quiet:
-                    print(
-                        f"K={K:>3} n={n:>3} rep={rep:>2} "
-                        f"nested: success={row['nested_success']} eta={row['nested_eta']:.4g} "
-                        f"time={row['nested_time_s']:.3f}s | "
-                        f"dual: success={row['dual_success']} eta={row['dual_eta']:.4g} "
-                        f"dual_eta={row['dual_dual_eta']:.4g} time={row['dual_time_s']:.3f}s"
-                    )
+                    method_parts = [
+                        f"{method}: success={row[f'{method}_success']} eta={row[f'{method}_eta']:.4g} "
+                        f"time={row[f'{method}_time_s']:.3f}s"
+                        for method in args.methods
+                    ]
+                    print(f"K={K:>3} n={n:>3} rep={rep:>2} " + " | ".join(method_parts))
 
-    print_summary(rows)
+    print_summary(rows, args.methods)
     if args.csv is not None:
         write_csv(rows, args.csv)
         print(f"\nwrote {args.csv}")
