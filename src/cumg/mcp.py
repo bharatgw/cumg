@@ -57,8 +57,17 @@ def solve_pyomo_mcp_model(
     attempted: list[str] = []
     failures: list[str] = []
 
-    def apply_options(opt):
-        for key, value in solver_options.items():
+    def options_for_solver(solver_name: str) -> dict[str, Any]:
+        if not solver_options:
+            return {}
+        if any(isinstance(value, dict) for value in solver_options.values()):
+            scoped_options = dict(solver_options.get("*", {}))
+            scoped_options.update(solver_options.get(solver_name, {}))
+            return scoped_options
+        return solver_options
+
+    def apply_options(opt, solver_name: str):
+        for key, value in options_for_solver(solver_name).items():
             opt.options[key] = value
 
     def prepare_model_for_solver(solver_name: str):
@@ -84,7 +93,7 @@ def solve_pyomo_mcp_model(
             failures.append(f"{solver_name}: unavailable")
             continue
         prepare_model_for_solver(solver_name)
-        apply_options(opt)
+        apply_options(opt, solver_name)
         start = perf_counter()
         result = opt.solve(model, tee=tee)
         elapsed = perf_counter() - start

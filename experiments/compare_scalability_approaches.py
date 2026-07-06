@@ -47,6 +47,15 @@ METHODS = (
     "stochastic_minibatch",
 )
 RISKS = ("msd", "cvar")
+DEFAULT_PATH_OPTIONS = {
+    "major_iteration_limit": 50_000_000,
+    "minor_iteration_limit": 50_000_000,
+    "cumulative_iteration_limit": 100_000_000,
+    "time_limit": 300,
+    "nms_memory_size": 50,
+    "restart_limit": 100,
+    "convergence_tolerance": 1e-8,
+}
 
 
 def simulate_random_payoffs(
@@ -81,6 +90,13 @@ def _minibatch_size(args: argparse.Namespace, K: int) -> int:
     return max(1, min(K, int(np.ceil(np.sqrt(K)))))
 
 
+def _solver_options(args: argparse.Namespace) -> dict[str, dict[str, Any]]:
+    path_options = getattr(args, "path_options", DEFAULT_PATH_OPTIONS)
+    if args.solver != "pathampl" or path_options is None:
+        return {}
+    return {"pathampl": dict(path_options)}
+
+
 def _support_config(
     args: argparse.Namespace, K: int, n: int, seed: int
 ) -> SupportSearchConfig:
@@ -100,7 +116,7 @@ def _support_config(
         seed=seed,
         solver=args.solver,
         fallback_solver=args.fallback_solver,
-        solver_options={},
+        solver_options=_solver_options(args),
     )
 
 
@@ -271,6 +287,7 @@ def _solve_mcp(risk: str, A, B, p, args: argparse.Namespace):
             gamma=args.gamma,
             solver=args.solver,
             fallback_solver=args.fallback_solver,
+            solver_options=_solver_options(args),
         )
         cert = full_msd_regret(A, B, p, args.gamma, result.x, result.y)
     else:
@@ -282,6 +299,7 @@ def _solve_mcp(risk: str, A, B, p, args: argparse.Namespace):
             alpha=args.alpha,
             solver=args.solver,
             fallback_solver=args.fallback_solver,
+            solver_options=_solver_options(args),
         )
         cert = full_cvar_regret(A, B, p, args.gamma, args.alpha, result.x, result.y)
     return result, cert
@@ -614,6 +632,7 @@ def parse_args() -> argparse.Namespace:
     args = parser.parse_args()
     if args.fallback_solver is not None and args.fallback_solver.lower() == "none":
         args.fallback_solver = None
+    args.path_options = DEFAULT_PATH_OPTIONS.copy()
     return args
 
 
