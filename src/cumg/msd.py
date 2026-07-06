@@ -55,8 +55,11 @@ def build_msd_mcp_model(A_list, B_list, p=None, gamma: float = 0.0) -> pyo.Concr
     model.z1 = pyo.Var(model.K, bounds=(None, 0.0))
     model.z2 = pyo.Var(model.K, bounds=(None, 0.0))
 
+    # Pyomo sets are iterable at runtime; pylint cannot infer the dynamic component type.
+    # pylint: disable=not-an-iterable
     model.simplex_x = pyo.Constraint(expr=sum(model.x[i] for i in model.I) == 1.0)
     model.simplex_y = pyo.Constraint(expr=sum(model.y[j] for j in model.J) == 1.0)
+    # pylint: enable=not-an-iterable
 
     def v1_rule(m, i):
         base = sum(m.Abar[i, j] * m.y[j] for j in m.J)

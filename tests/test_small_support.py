@@ -1,16 +1,19 @@
 import numpy as np
 import pytest
 
-from cumg.results import SolverResult, SupportSearchConfig
+from cumg.results import SupportSearchConfig
 from cumg.small_support import (
+    _certified_search,
     _restricted_data,
-    _search_with_solver,
     candidate_support_pairs,
     expand_support_probs,
     full_cvar_regret,
     full_msd_regret,
     restricted_profile_gap_msd,
     sample_supports,
+    supported_profile_gap_cvar_dual,
+    supported_profile_gap_msd,
+    supported_profile_gap_msd_dual,
 )
 
 
@@ -51,7 +54,9 @@ def test_restricted_data_slices_actions_and_scenarios():
     B = -A
     p = np.array([0.2, 0.3, 0.5])
 
-    A_sub, B_sub, p_sub, s1, s2, scenarios = _restricted_data(A, B, p, ((1, 3), (0, 4)), (2, 0))
+    A_sub, B_sub, p_sub, s1, s2, scenarios = _restricted_data(
+        A, B, p, ((1, 3), (0, 4)), (2, 0)
+    )
 
     assert s1 == (1, 3)
     assert s2 == (0, 4)
@@ -66,7 +71,9 @@ def test_restricted_data_uses_union_of_player_scenario_supports():
     B = -A
     p = np.array([0.2, 0.3, 0.5])
 
-    _, _, p_sub, _, _, scenarios = _restricted_data(A, B, p, ((1, 3), (0, 4)), ((2,), (0, 2)))
+    _, _, p_sub, _, _, scenarios = _restricted_data(
+        A, B, p, ((1, 3), (0, 4)), ((2,), (0, 2))
+    )
 
     assert scenarios == (0, 2)
     np.testing.assert_allclose(p_sub, np.array([2.0 / 7.0, 5.0 / 7.0]))
@@ -102,7 +109,9 @@ def test_full_msd_regret_lp_finds_mixed_best_response():
     )
 
     assert cert["regret1"] == pytest.approx(0.5, abs=1e-8)
-    np.testing.assert_allclose(cert["best_dev1"]["strategy"], np.array([0.5, 0.5]), atol=1e-8)
+    np.testing.assert_allclose(
+        cert["best_dev1"]["strategy"], np.array([0.5, 0.5]), atol=1e-8
+    )
 
 
 def test_full_cvar_regret_lp_finds_mixed_best_response():
@@ -120,7 +129,9 @@ def test_full_cvar_regret_lp_finds_mixed_best_response():
     )
 
     assert cert["regret1"] == pytest.approx(1.0, abs=1e-8)
-    np.testing.assert_allclose(cert["best_dev1"]["strategy"], np.array([0.5, 0.5]), atol=1e-8)
+    np.testing.assert_allclose(
+        cert["best_dev1"]["strategy"], np.array([0.5, 0.5]), atol=1e-8
+    )
 
 
 def test_restricted_profile_gap_msd_returns_screen_certificate():
@@ -144,44 +155,86 @@ def test_restricted_profile_gap_msd_returns_screen_certificate():
     np.testing.assert_allclose(screen["x"], np.array([1.0, 0.0]), atol=1e-5)
 
 
-def test_search_with_solver_expands_restricted_solution_to_full_profile():
-    A = np.ones((2, 3, 4))
-    B = -A
-    p = np.array([0.25, 0.75])
-    config = SupportSearchConfig(kappa=2, tau=1, max_candidates=1, seed=2, solver="fake")
+def test_certified_search_optimizes_full_regret_over_screened_support():
+    A = [np.array([[1.0, -1.0], [-1.0, 1.0]])]
+    B = [-A[0]]
+    p = np.array([1.0])
+    config = SupportSearchConfig(
+        epsilon=1e-6,
+        epsilon_scr=1.0,
+        kappa=2,
+        tau=1,
+        max_candidates=1,
+        n_regret_starts=2,
+        seed=0,
+    )
 
-    def fake_solver(A_sub, B_sub, p, **kwargs):
-        assert len(A_sub) == 1
-        assert A_sub[0].shape == (2, 2)
-        return SolverResult(
-            x=np.array([0.25, 0.75]),
-            y=np.array([0.4, 0.6]),
-            alpha1=1.0,
-            alpha2=-1.0,
-            model="fake",
-            solver=kwargs["solver"],
-        )
+    def fake_screen(A, B, p, S, T, **kwargs):
+        return {
+            "eta": 0.0,
+            "success": True,
+            "x": np.array([1.0, 0.0]),
+            "y": np.array([1.0, 0.0]),
+            "S": S,
+            "T": T,
+        }
 
-    result = _search_with_solver(A, B, p, fake_solver, {}, config)
+    result = _certified_search(
+        A,
+        B,
+        p,
+        fake_screen,
+        supported_profile_gap_msd,
+        {},
+        {"gamma": 0.0},
+        config,
+    )
 
     assert result.success
-    assert result.candidate_index == 1
-    assert result.x.shape == (3,)
-    assert result.y.shape == (4,)
-    assert result.x.sum() == 1.0
-    assert result.y.sum() == 1.0
-    assert result.solver_result.solver == "fake"
+    np.testing.assert_allclose(result.x, np.array([0.5, 0.5]), atol=1e-6)
+    np.testing.assert_allclose(result.y, np.array([0.5, 0.5]), atol=1e-6)
+    np.testing.assert_allclose(result.metadata["screen"]["x"], np.array([1.0, 0.0]))
+    assert result.metadata["support_certificate"]["eta"] == pytest.approx(0.0, abs=1e-8)
 
 
-def test_search_with_solver_reports_best_error_when_all_candidates_fail():
-    A = np.ones((1, 2, 2))
-    B = -A
-    config = SupportSearchConfig(kappa=1, tau=1, max_candidates=2, seed=0)
+def test_dualized_supported_profile_gap_msd_finds_supported_equilibrium():
+    A = [np.array([[1.0, -1.0], [-1.0, 1.0]])]
+    B = [-A[0]]
 
-    def failing_solver(*args, **kwargs):
-        raise RuntimeError("solver unavailable")
+    out = supported_profile_gap_msd_dual(
+        A,
+        B,
+        np.array([1.0]),
+        gamma=0.5,
+        S=((0, 1), (0, 1)),
+        n_starts=1,
+        seed=0,
+        maxiter=200,
+    )
 
-    result = _search_with_solver(A, B, np.array([1.0]), failing_solver, {}, config)
+    assert out["success"]
+    assert out["eta"] == pytest.approx(0.0, abs=1e-8)
+    np.testing.assert_allclose(out["x"], np.array([0.5, 0.5]), atol=1e-6)
+    np.testing.assert_allclose(out["y"], np.array([0.5, 0.5]), atol=1e-6)
 
-    assert not result.success
-    assert result.best_error == "solver unavailable"
+
+def test_dualized_supported_profile_gap_cvar_finds_supported_equilibrium():
+    A = [np.array([[1.0, -1.0], [-1.0, 1.0]])]
+    B = [-A[0]]
+
+    out = supported_profile_gap_cvar_dual(
+        A,
+        B,
+        np.array([1.0]),
+        gamma=0.5,
+        alpha=1.0,
+        S=((0, 1), (0, 1)),
+        n_starts=1,
+        seed=0,
+        maxiter=200,
+    )
+
+    assert out["success"]
+    assert out["eta"] == pytest.approx(0.0, abs=1e-8)
+    np.testing.assert_allclose(out["x"], np.array([0.5, 0.5]), atol=1e-6)
+    np.testing.assert_allclose(out["y"], np.array([0.5, 0.5]), atol=1e-6)
