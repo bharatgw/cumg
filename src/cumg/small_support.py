@@ -19,7 +19,7 @@ from .cvar import (
 )
 from .msd import msd_profile_values, msd_value_from_state_payoffs, solve_msd_mcp
 from .results import SupportSearchConfig, SupportSearchResult
-from .validation import normalize_game_inputs, normalize_probabilities
+from .validation import _validate_mixed_strategy, normalize_game_inputs, normalize_probabilities
 
 
 def expand_support_probs(probs, support, n: int) -> np.ndarray:
@@ -36,9 +36,7 @@ def expand_support_probs(probs, support, n: int) -> np.ndarray:
     return out
 
 
-def sample_supports(
-    n: int, size: int, rng: np.random.Generator, max_exact: int = 200
-) -> list[tuple[int, ...]]:
+def sample_supports(n: int, size: int, rng: np.random.Generator, max_exact: int = 200) -> list[tuple[int, ...]]:
     """Enumerate small support sets exactly, otherwise sample without replacement."""
 
     if n <= 0:
@@ -121,38 +119,6 @@ def support_sizes(K: int, n: int) -> tuple[int, int]:
     return kappa, tau
 
 
-def _scenario_union(T) -> tuple[int, ...]:
-    if len(T) == 2 and all(isinstance(part, tuple | list | np.ndarray) for part in T):
-        return tuple(sorted(set(int(k) for part in T for k in part)))
-    return tuple(int(k) for k in T)
-
-
-def _restricted_data(A, B, p, S, T):
-    p1_support, p2_support = tuple(S[0]), tuple(S[1])
-    scenario_support = _scenario_union(T)
-    p_sub = normalize_probabilities(p[list(scenario_support)])
-    A_sub = [A[k][np.ix_(p1_support, p2_support)] for k in scenario_support]
-    B_sub = [B[k][np.ix_(p1_support, p2_support)] for k in scenario_support]
-    return A_sub, B_sub, p_sub, p1_support, p2_support, scenario_support
-
-
-def _validate_mixed_strategy(
-    strategy, n: int, name: str, atol: float = 1e-6
-) -> np.ndarray:
-    strategy = np.asarray(strategy, dtype=float)
-    if strategy.shape != (n,):
-        raise ValueError(f"{name} must have shape ({n},); got {strategy.shape}.")
-    if not np.all(np.isfinite(strategy)):
-        raise ValueError(f"{name} must contain finite probabilities.")
-    if np.any(strategy < -atol):
-        raise ValueError(f"{name} must contain nonnegative probabilities.")
-    total = float(strategy.sum())
-    if not np.isclose(total, 1.0, atol=atol):
-        raise ValueError(f"{name} must sum to 1.")
-    strategy = np.maximum(strategy, 0.0)
-    return strategy / strategy.sum()
-
-
 def _strategy_from_lp_result(res, dim: int) -> np.ndarray:
     strategy = np.asarray(res.x[:dim], dtype=float)
     strategy[np.abs(strategy) <= 1e-12] = 0.0
@@ -163,9 +129,7 @@ def _strategy_from_lp_result(res, dim: int) -> np.ndarray:
     return strategy / total
 
 
-def _lp_best_response_from_result(
-    res, dim: int, value_fn: Callable[[np.ndarray], float]
-) -> dict[str, Any]:
+def _lp_best_response_from_result(res, dim: int, value_fn: Callable[[np.ndarray], float]) -> dict[str, Any]:
     if not res.success:
         raise RuntimeError(f"LP best response failed: {res.message}")
     strategy = _strategy_from_lp_result(res, dim)
@@ -187,14 +151,10 @@ def _maximize_linear_on_simplex(payoff_by_action: np.ndarray) -> dict[str, Any]:
         bounds=[(0.0, 1.0)] * dim,
         method="highs",
     )
-    return _lp_best_response_from_result(
-        res, dim, lambda q: float(payoff_by_action @ q)
-    )
+    return _lp_best_response_from_result(res, dim, lambda q: float(payoff_by_action @ q))
 
 
-def _maximize_msd_on_simplex(
-    payoff_by_action: np.ndarray, p: np.ndarray, gamma: float
-) -> dict[str, Any]:
+def _maximize_msd_on_simplex(payoff_by_action: np.ndarray, p: np.ndarray, gamma: float) -> dict[str, Any]:
     payoff_by_action = np.asarray(payoff_by_action, dtype=float)
     p = np.asarray(p, dtype=float)
     n_states, dim = payoff_by_action.shape
@@ -247,9 +207,7 @@ def _maximize_cvar_on_simplex(
     # Variables are [strategy, eta, tail_shortfall]. This is the LP form of
     # gamma * lower-tail CVaR_alpha(state_payoff).
     cap = gamma * p / alpha
-    c = np.concatenate(
-        [-(1.0 - gamma) * expected_payoff_by_action, np.array([-gamma]), cap]
-    )
+    c = np.concatenate([-(1.0 - gamma) * expected_payoff_by_action, np.array([-gamma]), cap])
     A_ub = np.zeros((n_states, dim + 1 + n_states), dtype=float)
     A_ub[:, :dim] = -payoff_by_action
     A_ub[:, dim] = 1.0
@@ -275,9 +233,7 @@ def _maximize_cvar_on_simplex(
     )
 
 
-def _keep_current_strategy_if_better(
-    best: dict[str, Any], strategy: np.ndarray, value: float
-) -> dict[str, Any]:
+def _keep_current_strategy_if_better(best: dict[str, Any], strategy: np.ndarray, value: float) -> dict[str, Any]:
     if value > best["value"]:
         return best | {
             "value": float(value),
@@ -418,11 +374,7 @@ def _screen_profile(
         {"type": "ineq", "fun": ineq_constraints},
     ]
     bounds = [(0.0, 1.0)] * (s1 + s2 + t1 + t2) + [eta_bounds]
-    starts = [
-        np.concatenate(
-            [np.ones(s1) / s1, np.ones(s2) / s2, p_T1, p_T2, np.array([0.0])]
-        )
-    ]
+    starts = [np.concatenate([np.ones(s1) / s1, np.ones(s2) / s2, p_T1, p_T2, np.array([0.0])])]
     for _ in range(max(0, n_starts - len(starts))):
         starts.append(
             np.concatenate(
@@ -496,9 +448,7 @@ def restricted_profile_gap_msd(
     """Solve the notebook-style restricted MSD screening problem."""
 
     A, B, p = normalize_game_inputs(A_list, B_list, p)
-    return _screen_profile(
-        A, B, p, msd_value_from_state_payoffs, (gamma,), S, T, n_starts, seed, maxiter
-    )
+    return _screen_profile(A, B, p, msd_value_from_state_payoffs, (gamma,), S, T, n_starts, seed, maxiter)
 
 
 def restricted_profile_gap_cvar(
@@ -541,9 +491,7 @@ def _normalize_simplex_candidate(strategy: np.ndarray) -> np.ndarray | None:
     return strategy / total
 
 
-def _support_start_from_profile(
-    profile: np.ndarray | None, support: tuple[int, ...]
-) -> np.ndarray | None:
+def _support_start_from_profile(profile: np.ndarray | None, support: tuple[int, ...]) -> np.ndarray | None:
     if profile is None:
         return None
     profile = np.asarray(profile, dtype=float)
@@ -613,9 +561,7 @@ def _minimize_supported_profile_gap(
         starts.append(np.concatenate([x_start, y_start]))
     starts.append(np.concatenate([np.ones(s1) / s1, np.ones(s2) / s2]))
     for _ in range(max(0, n_starts - len(starts))):
-        starts.append(
-            np.concatenate([rng.dirichlet(np.ones(s1)), rng.dirichlet(np.ones(s2))])
-        )
+        starts.append(np.concatenate([rng.dirichlet(np.ones(s1)), rng.dirichlet(np.ones(s2))]))
 
     constraints = [{"type": "eq", "fun": eq_constraints}]
     bounds = [(0.0, 1.0)] * (s1 + s2)
@@ -658,9 +604,7 @@ def _minimize_supported_profile_gap(
             "certificate": cert,
         }
     )
-    best["success"] = bool(
-        best["success"] and best["violation"] <= 1e-6 and np.isfinite(best["eta"])
-    )
+    best["success"] = bool(best["success"] and best["violation"] <= 1e-6 and np.isfinite(best["eta"]))
     return best
 
 
@@ -899,12 +843,8 @@ def supported_profile_gap_msd_dual(
         p2_payoff_by_action = np.einsum("a,kaj->kj", x_s, B_dev)
         p1_mean_by_action = p @ p1_payoff_by_action
         p2_mean_by_action = p @ p2_payoff_by_action
-        p1_dual_values = p1_mean_by_action + lam1 @ (
-            p1_payoff_by_action - p1_mean_by_action
-        )
-        p2_dual_values = p2_mean_by_action + lam2 @ (
-            p2_payoff_by_action - p2_mean_by_action
-        )
+        p1_dual_values = p1_mean_by_action + lam1 @ (p1_payoff_by_action - p1_mean_by_action)
+        p2_dual_values = p2_mean_by_action + lam2 @ (p2_payoff_by_action - p2_mean_by_action)
         return {
             "eta": eta,
             "beta1": beta1,
@@ -951,18 +891,12 @@ def supported_profile_gap_msd_dual(
         p2_payoff_by_action = np.einsum("a,kaj->kj", x_s, B_dev)
         p1_mean_by_action = p @ p1_payoff_by_action
         p2_mean_by_action = p @ p2_payoff_by_action
-        beta1 = float(
-            np.max(p1_mean_by_action + lam1 @ (p1_payoff_by_action - p1_mean_by_action))
-        )
-        beta2 = float(
-            np.max(p2_mean_by_action + lam2 @ (p2_payoff_by_action - p2_mean_by_action))
-        )
+        beta1 = float(np.max(p1_mean_by_action + lam1 @ (p1_payoff_by_action - p1_mean_by_action)))
+        beta2 = float(np.max(p2_mean_by_action + lam2 @ (p2_payoff_by_action - p2_mean_by_action)))
         rho1 = mean1 + gamma * float(p @ d1)
         rho2 = mean2 + gamma * float(p @ d2)
         eta = max(0.0, beta1 - rho1, beta2 - rho2)
-        return np.concatenate(
-            [x_s, y_s, np.array([eta, beta1, beta2]), d1, d2, lam1, lam2]
-        )
+        return np.concatenate([x_s, y_s, np.array([eta, beta1, beta2]), d1, d2, lam1, lam2])
 
     starts = []
     x_start = _support_start_from_profile(x0, S1)
@@ -971,9 +905,7 @@ def supported_profile_gap_msd_dual(
         starts.append(make_start(x_start, y_start))
     starts.append(make_start(np.ones(s1) / s1, np.ones(s2) / s2))
     for _ in range(max(0, n_starts - len(starts))):
-        starts.append(
-            make_start(rng.dirichlet(np.ones(s1)), rng.dirichlet(np.ones(s2)))
-        )
+        starts.append(make_start(rng.dirichlet(np.ones(s1)), rng.dirichlet(np.ones(s2))))
 
     constraints = [
         {"type": "eq", "fun": eq_constraints},
@@ -1022,13 +954,9 @@ def supported_profile_gap_msd_dual(
     x = expand_support_probs(_normalize_simplex_candidate(x_s), S1, n1)
     y = expand_support_probs(_normalize_simplex_candidate(y_s), S2, n2)
     cert = full_msd_regret(A, B, p, gamma, x, y)
-    best.update(
-        {"eta": float(cert["eta"]), "x": x, "y": y, "S": (S1, S2), "certificate": cert}
-    )
+    best.update({"eta": float(cert["eta"]), "x": x, "y": y, "S": (S1, S2), "certificate": cert})
     best["optimizer_success"] = best["success"]
-    best["success"] = bool(
-        best["violation"] <= 1e-6 and np.isfinite(best["eta"])
-    )
+    best["success"] = bool(best["violation"] <= 1e-6 and np.isfinite(best["eta"]))
     return best
 
 
@@ -1157,18 +1085,12 @@ def supported_profile_gap_cvar_dual(
         p2_payoff_by_action = np.einsum("a,kaj->kj", x_s, B_dev)
         p1_mean_by_action = p @ p1_payoff_by_action
         p2_mean_by_action = p @ p2_payoff_by_action
-        beta1 = float(
-            np.max((1.0 - gamma) * p1_mean_by_action + lam1 @ p1_payoff_by_action)
-        )
-        beta2 = float(
-            np.max((1.0 - gamma) * p2_mean_by_action + lam2 @ p2_payoff_by_action)
-        )
+        beta1 = float(np.max((1.0 - gamma) * p1_mean_by_action + lam1 @ p1_payoff_by_action))
+        beta2 = float(np.max((1.0 - gamma) * p2_mean_by_action + lam2 @ p2_payoff_by_action))
         rho1 = (1.0 - gamma) * mean1 + gamma * z1 - float(cap @ w1)
         rho2 = (1.0 - gamma) * mean2 + gamma * z2 - float(cap @ w2)
         eta = max(0.0, beta1 - rho1, beta2 - rho2)
-        return np.concatenate(
-            [x_s, y_s, np.array([eta, beta1, beta2, z1, z2]), w1, w2, lam1, lam2]
-        )
+        return np.concatenate([x_s, y_s, np.array([eta, beta1, beta2, z1, z2]), w1, w2, lam1, lam2])
 
     starts = []
     x_start = _support_start_from_profile(x0, S1)
@@ -1177,9 +1099,7 @@ def supported_profile_gap_cvar_dual(
         starts.append(make_start(x_start, y_start))
     starts.append(make_start(np.ones(s1) / s1, np.ones(s2) / s2))
     for _ in range(max(0, n_starts - len(starts))):
-        starts.append(
-            make_start(rng.dirichlet(np.ones(s1)), rng.dirichlet(np.ones(s2)))
-        )
+        starts.append(make_start(rng.dirichlet(np.ones(s1)), rng.dirichlet(np.ones(s2))))
 
     constraints = [
         {"type": "eq", "fun": eq_constraints},
@@ -1229,13 +1149,9 @@ def supported_profile_gap_cvar_dual(
     x = expand_support_probs(_normalize_simplex_candidate(x_s), S1, n1)
     y = expand_support_probs(_normalize_simplex_candidate(y_s), S2, n2)
     cert = full_cvar_regret(A, B, p, gamma, alpha, x, y)
-    best.update(
-        {"eta": float(cert["eta"]), "x": x, "y": y, "S": (S1, S2), "certificate": cert}
-    )
+    best.update({"eta": float(cert["eta"]), "x": x, "y": y, "S": (S1, S2), "certificate": cert})
     best["optimizer_success"] = best["success"]
-    best["success"] = bool(
-        best["violation"] <= 1e-6 and np.isfinite(best["eta"])
-    )
+    best["success"] = bool(best["violation"] <= 1e-6 and np.isfinite(best["eta"]))
     return best
 
 
@@ -1261,9 +1177,7 @@ def _certified_search(
     best_error = None
 
     for idx, (S, T) in enumerate(
-        candidate_support_pairs(
-            n1, n2, K, config.kappa, config.tau, config.max_candidates, rng
-        ),
+        candidate_support_pairs(n1, n2, K, config.kappa, config.tau, config.max_candidates, rng),
         start=1,
     ):
         try:
@@ -1341,9 +1255,7 @@ def _certified_search(
             best_error=best_error,
             metadata={"best_screen": best_screen, "best_regret": best_regret},
         )
-    return SupportSearchResult(
-        success=False, best_error=best_error, metadata={"best_screen": best_screen}
-    )
+    return SupportSearchResult(success=False, best_error=best_error, metadata={"best_screen": best_screen})
 
 
 def _accepted_keyword_names(fn: Callable) -> set[str] | None:
@@ -1414,9 +1326,7 @@ def _action_support_search(
                 "support_certificate": support_cert,
                 "certificate": certificate,
                 "candidate_index": idx,
-                "success": bool(
-                    support_cert["success"] and np.isfinite(eta) and eta <= config.epsilon
-                ),
+                "success": bool(support_cert["success"] and np.isfinite(eta) and eta <= config.epsilon),
             }
             if eta < best_eta:
                 best_candidate = candidate
@@ -1448,9 +1358,7 @@ def _action_support_search(
             best_error=best_error,
             metadata={"best_candidate": best_candidate},
         )
-    return SupportSearchResult(
-        success=False, best_error=best_error, metadata={"best_candidate": None}
-    )
+    return SupportSearchResult(success=False, best_error=best_error, metadata={"best_candidate": None})
 
 
 def _msd_regret_wrapper(A, B, p, x, y, gamma: float, **kwargs):

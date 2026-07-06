@@ -4,7 +4,6 @@ import pytest
 from cumg.results import SupportSearchConfig
 from cumg.small_support import (
     _certified_search,
-    _restricted_data,
     candidate_support_pairs,
     expand_support_probs,
     full_cvar_regret,
@@ -49,36 +48,6 @@ def test_expand_support_probs_places_probabilities_at_support_indices():
     full = expand_support_probs(np.array([0.1, 0.9]), (2, 0), 4)
 
     np.testing.assert_allclose(full, np.array([0.9, 0.0, 0.1, 0.0]))
-
-
-def test_restricted_data_slices_actions_and_scenarios():
-    A = np.arange(3 * 4 * 5, dtype=float).reshape(3, 4, 5)
-    B = -A
-    p = np.array([0.2, 0.3, 0.5])
-
-    A_sub, B_sub, p_sub, s1, s2, scenarios = _restricted_data(
-        A, B, p, ((1, 3), (0, 4)), (2, 0)
-    )
-
-    assert s1 == (1, 3)
-    assert s2 == (0, 4)
-    assert scenarios == (2, 0)
-    np.testing.assert_allclose(p_sub, np.array([5.0 / 7.0, 2.0 / 7.0]))
-    np.testing.assert_allclose(A_sub[0], A[2][np.ix_((1, 3), (0, 4))])
-    np.testing.assert_allclose(B_sub[1], B[0][np.ix_((1, 3), (0, 4))])
-
-
-def test_restricted_data_uses_union_of_player_scenario_supports():
-    A = np.arange(3 * 4 * 5, dtype=float).reshape(3, 4, 5)
-    B = -A
-    p = np.array([0.2, 0.3, 0.5])
-
-    _, _, p_sub, _, _, scenarios = _restricted_data(
-        A, B, p, ((1, 3), (0, 4)), ((2,), (0, 2))
-    )
-
-    assert scenarios == (0, 2)
-    np.testing.assert_allclose(p_sub, np.array([2.0 / 7.0, 5.0 / 7.0]))
 
 
 def test_full_msd_regret_is_zero_for_dominant_action_profile():
@@ -254,7 +223,9 @@ def test_action_support_search_msd_with_dual_backend_finds_supported_equilibrium
         seed=0,
     )
 
-    out = small_support_action_search_msd(A, B, np.array([1.0]), gamma=0.5, config=config)
+    out = small_support_action_search_msd(
+        A, B, np.array([1.0]), gamma=0.5, config=config
+    )
 
     assert out.success, out.best_error
     assert out.scenarios is None

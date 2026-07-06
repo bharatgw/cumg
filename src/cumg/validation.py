@@ -23,6 +23,21 @@ def normalize_probabilities(p, K: int | None = None) -> np.ndarray:
     return probs / total
 
 
+def _validate_mixed_strategy(strategy, n: int, name: str, atol: float = 1e-6) -> np.ndarray:
+    strategy = np.asarray(strategy, dtype=float)
+    if strategy.shape != (n,):
+        raise ValueError(f"{name} must have shape ({n},); got {strategy.shape}.")
+    if not np.all(np.isfinite(strategy)):
+        raise ValueError(f"{name} must contain finite probabilities.")
+    if np.any(strategy < -atol):
+        raise ValueError(f"{name} must contain nonnegative probabilities.")
+    total = float(strategy.sum())
+    if not np.isclose(total, 1.0, atol=atol):
+        raise ValueError(f"{name} must sum to 1.")
+    strategy = np.maximum(strategy, 0.0)
+    return strategy / strategy.sum()
+
+
 def normalize_game_inputs(
     A_list: list[np.ndarray] | np.ndarray,
     B_list: list[np.ndarray] | np.ndarray,

@@ -10,7 +10,12 @@ from pyomo.mpec import Complementarity, complements
 
 from .mcp import solve_pyomo_mcp_model
 from .results import SolverResult
-from .validation import as_matrix_lists, normalize_game_inputs, normalize_probabilities
+from .validation import (
+    _validate_mixed_strategy,
+    as_matrix_lists,
+    normalize_game_inputs,
+    normalize_probabilities,
+)
 
 
 def build_msd_mcp_model(A_list, B_list, p=None, gamma: float = 0.0) -> pyo.ConcreteModel:
@@ -30,7 +35,11 @@ def build_msd_mcp_model(A_list, B_list, p=None, gamma: float = 0.0) -> pyo.Concr
     def to_param_3d(mats):
         return {(k, i, j): float(mats[k][i, j]) for k in range(K) for i in range(n1) for j in range(n2)}
 
-    model.p = pyo.Param(model.K, initialize={k: float(p[k]) for k in range(K)}, within=pyo.NonNegativeReals)
+    model.p = pyo.Param(
+        model.K,
+        initialize={k: float(p[k]) for k in range(K)},
+        within=pyo.NonNegativeReals,
+    )
     model.gamma = pyo.Param(initialize=float(gamma), within=pyo.NonNegativeReals)
     model.A = pyo.Param(model.K, model.I, model.J, initialize=to_param_3d(A_list))
     model.B = pyo.Param(model.K, model.I, model.J, initialize=to_param_3d(B_list))
@@ -86,11 +95,13 @@ def build_msd_mcp_model(A_list, B_list, p=None, gamma: float = 0.0) -> pyo.Concr
     model.comp_y = Complementarity(model.J, rule=lambda m, j: complements(m.y[j] >= 0, m.alpha2 - m.v2[j] >= 0))
     model.comp_r1 = Complementarity(model.K, rule=lambda m, k: complements(m.lam1[k] >= 0, m.r1[k] - m.z1[k] >= 0))
     model.comp_z1 = Complementarity(
-        model.K, rule=lambda m, k: complements(m.gamma * m.p[k] - m.lam1[k] >= 0, -m.z1[k] >= 0)
+        model.K,
+        rule=lambda m, k: complements(m.gamma * m.p[k] - m.lam1[k] >= 0, -m.z1[k] >= 0),
     )
     model.comp_r2 = Complementarity(model.K, rule=lambda m, k: complements(m.lam2[k] >= 0, m.r2[k] - m.z2[k] >= 0))
     model.comp_z2 = Complementarity(
-        model.K, rule=lambda m, k: complements(m.gamma * m.p[k] - m.lam2[k] >= 0, -m.z2[k] >= 0)
+        model.K,
+        rule=lambda m, k: complements(m.gamma * m.p[k] - m.lam2[k] >= 0, -m.z2[k] >= 0),
     )
     return model
 
@@ -153,10 +164,8 @@ def msd_profile_values(A_list, B_list, p, gamma: float, x, y) -> dict[str, np.nd
     """Evaluate MSD payoffs for a fixed mixed profile."""
 
     A, B, p = normalize_game_inputs(A_list, B_list, p)
-    x = np.asarray(x, dtype=float)
-    y = np.asarray(y, dtype=float)
-    if x.shape != (A.shape[1],) or y.shape != (A.shape[2],):
-        raise ValueError(f"x and y must have shapes ({A.shape[1]},) and ({A.shape[2]},).")
+    x = _validate_mixed_strategy(np.asarray(x, dtype=float), A.shape[1], "x")
+    y = _validate_mixed_strategy(np.asarray(y, dtype=float), A.shape[2], "y")
     if not np.all(np.isfinite(x)) or not np.all(np.isfinite(y)):
         raise ValueError("x and y must contain finite strategy values.")
     u1_states = np.einsum("i,kij,j->k", x, A, y)
