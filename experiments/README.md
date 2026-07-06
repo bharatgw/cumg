@@ -6,6 +6,8 @@ This directory preserves the research workflows and committed outputs used while
 
 - `mcpSolvers.ipynb`: main notebook for MCP formulations, small-support experiments, and plots.
 - `mcpAlgoAnalysis.ipynb`: analysis and plotting notebook for scalability outputs.
+- `compare_small_support_msd.py`: script comparing MSD small-support search backends.
+- `compare_stochastic_fo_msd.py`: script comparing full-batch and mini-batch MSD stochastic first-order runs.
 - `legacy/`: original standalone scripts kept as provenance for the packaged implementation.
 - `results/`: committed CSV outputs from experiments.
 
@@ -33,4 +35,3 @@ These CSV files are intentionally tracked in git for reproducibility, but they a
 5. Promote only curated, documented CSV outputs into `experiments/results/`.
 
 Large third-party solver distributions, PDFs, and archives were removed from the publishable tree. Local copies, if present, live under `.local/removed_artifacts/` and are ignored by git.
-
