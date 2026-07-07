@@ -1,4 +1,5 @@
 import argparse
+import csv
 import importlib.util
 from pathlib import Path
 
@@ -21,6 +22,8 @@ def base_args(methods):
         K=[2],
         n=[2],
         reps=1,
+        rep_start=0,
+        rep_stop=None,
         seed_base=123,
         gamma=0.0,
         alpha=1.0,
@@ -93,3 +96,73 @@ def test_scalability_driver_run_experiment_returns_both_risks():
 
     assert {row["risk"] for row in rows} == {"msd", "cvar"}
     assert len(rows) == 2
+
+
+def test_scalability_driver_default_rep_range_preserves_seed_formula(monkeypatch):
+    args = base_args(["stochastic_full_batch"])
+    args.risk = ["msd"]
+    args.K = [2]
+    args.n = [3]
+    args.reps = 3
+
+    def fake_run_instance(args, risk, K, n, seed):
+        return {"risk": risk, "K": K, "n": n, "seed": seed}
+
+    monkeypatch.setattr(compare_scalability_approaches, "run_instance", fake_run_instance)
+
+    rows = compare_scalability_approaches.run_experiment(args)
+
+    assert [row["seed"] for row in rows] == [20_423, 20_424, 20_425]
+
+
+def test_scalability_driver_rep_shard_uses_absolute_rep_indices(monkeypatch):
+    args = base_args(["stochastic_full_batch"])
+    args.risk = ["cvar"]
+    args.K = [2]
+    args.n = [3]
+    args.reps = 5
+    args.rep_start = 2
+    args.rep_stop = 4
+
+    def fake_run_instance(args, risk, K, n, seed):
+        return {"risk": risk, "K": K, "n": n, "seed": seed}
+
+    monkeypatch.setattr(compare_scalability_approaches, "run_instance", fake_run_instance)
+
+    rows = compare_scalability_approaches.run_experiment(args)
+
+    assert [row["seed"] for row in rows] == [1_020_425, 1_020_426]
+
+
+def test_scalability_driver_streams_valid_csv_rows(tmp_path, monkeypatch):
+    args = base_args(["stochastic_full_batch"])
+    args.risk = ["msd"]
+    args.K = [2]
+    args.n = [3]
+    args.reps = 2
+    csv_path = tmp_path / "shard.csv"
+
+    def fake_run_instance(args, risk, K, n, seed):
+        return {"risk": risk, "K": K, "n": n, "seed": seed, "status": "done"}
+
+    monkeypatch.setattr(compare_scalability_approaches, "run_instance", fake_run_instance)
+
+    with compare_scalability_approaches.StreamingCsvWriter(csv_path) as writer:
+        rows = compare_scalability_approaches.run_experiment(args, row_callback=writer.write_row)
+
+    with csv_path.open(newline="") as f:
+        csv_rows = list(csv.DictReader(f))
+
+    assert len(rows) == 2
+    assert [row["seed"] for row in csv_rows] == ["20423", "20424"]
+    assert {row["status"] for row in csv_rows} == {"done"}
+
+
+def test_scalability_driver_rejects_invalid_rep_shard():
+    args = base_args(["stochastic_full_batch"])
+    args.reps = 3
+    args.rep_start = 2
+    args.rep_stop = 4
+
+    with pytest.raises(ValueError, match="rep-stop"):
+        compare_scalability_approaches.run_experiment(args)

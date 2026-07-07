@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import csv
 import sys
+from collections.abc import Callable
 from pathlib import Path
 from time import perf_counter
 from typing import Any
@@ -531,12 +532,29 @@ def run_instance(
     return row
 
 
-def run_experiment(args: argparse.Namespace) -> list[dict[str, Any]]:
+def _rep_indices(args: argparse.Namespace) -> range:
+    rep_stop = args.rep_stop if args.rep_stop is not None else args.reps
+    if args.reps < 0:
+        raise ValueError("reps must be nonnegative.")
+    if args.rep_start < 0:
+        raise ValueError("rep-start must be nonnegative.")
+    if rep_stop < args.rep_start:
+        raise ValueError("rep-stop must be greater than or equal to rep-start.")
+    if rep_stop > args.reps:
+        raise ValueError("rep-stop must be less than or equal to reps.")
+    return range(args.rep_start, rep_stop)
+
+
+def run_experiment(
+    args: argparse.Namespace,
+    row_callback: Callable[[dict[str, Any]], None] | None = None,
+) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
+    rep_indices = _rep_indices(args)
     for risk in args.risk:
         for K in args.K:
             for n in args.n:
-                for rep in range(args.reps):
+                for rep in rep_indices:
                     seed = (
                         args.seed_base
                         + 1_000_000 * RISKS.index(risk)
@@ -546,6 +564,8 @@ def run_experiment(args: argparse.Namespace) -> list[dict[str, Any]]:
                     )
                     row = run_instance(args, risk, K, n, seed)
                     rows.append(row)
+                    if row_callback is not None:
+                        row_callback(row)
                     if not args.quiet:
                         parts = [
                             f"{method}: ok={row[f'{method}_success']} eta={row[f'{method}_eta']:.4g} "
@@ -596,12 +616,39 @@ def write_csv(rows: list[dict[str, Any]], path: Path) -> None:
         writer.writerows(rows)
 
 
+class StreamingCsvWriter:
+    def __init__(self, path: Path):
+        self.path = path
+        self._file = None
+        self._writer: csv.DictWriter | None = None
+
+    def __enter__(self) -> StreamingCsvWriter:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._file = self.path.open("w", newline="")
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
+        if self._file is not None:
+            self._file.close()
+
+    def write_row(self, row: dict[str, Any]) -> None:
+        if self._file is None:
+            raise RuntimeError("StreamingCsvWriter must be used as a context manager.")
+        if self._writer is None:
+            self._writer = csv.DictWriter(self._file, fieldnames=list(row))
+            self._writer.writeheader()
+        self._writer.writerow(row)
+        self._file.flush()
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--risk", nargs="+", choices=RISKS, default=["msd", "cvar"])
     parser.add_argument("--K", type=int, nargs="+", default=[5, 10])
     parser.add_argument("--n", type=int, nargs="+", default=[5, 10])
     parser.add_argument("--reps", type=int, default=3)
+    parser.add_argument("--rep-start", type=int, default=0)
+    parser.add_argument("--rep-stop", type=int, default=None)
     parser.add_argument("--seed-base", type=int, default=123)
     parser.add_argument("--gamma", type=float, default=0.5)
     parser.add_argument("--alpha", type=float, default=0.5)
@@ -633,15 +680,22 @@ def parse_args() -> argparse.Namespace:
     if args.fallback_solver is not None and args.fallback_solver.lower() == "none":
         args.fallback_solver = None
     args.path_options = DEFAULT_PATH_OPTIONS.copy()
+    try:
+        _rep_indices(args)
+    except ValueError as exc:
+        parser.error(str(exc))
     return args
 
 
 def main() -> None:
     args = parse_args()
-    rows = run_experiment(args)
+    if args.csv is not None:
+        with StreamingCsvWriter(args.csv) as writer:
+            rows = run_experiment(args, row_callback=writer.write_row)
+    else:
+        rows = run_experiment(args)
     print_summary(rows, args.methods)
     if args.csv is not None:
-        write_csv(rows, args.csv)
         print(f"\nwrote {args.csv}")
 
 
