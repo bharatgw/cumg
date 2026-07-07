@@ -781,6 +781,27 @@ def _payoff_abs_scale(A: np.ndarray, B: np.ndarray) -> float:
     return max(1.0, float(np.max(np.abs(A))), float(np.max(np.abs(B))))
 
 
+def _finalize_supported_gap_candidate(
+    candidate: dict[str, Any],
+    *,
+    unpack: Callable,
+    S1: tuple[int, ...],
+    S2: tuple[int, ...],
+    n1: int,
+    n2: int,
+    cert_fn: Callable[[np.ndarray, np.ndarray], dict[str, Any]],
+) -> dict[str, Any]:
+    out = dict(candidate)
+    x_s, y_s, *_ = unpack(out["result_x"])
+    x = expand_support_probs(_normalize_simplex_candidate(x_s), S1, n1)
+    y = expand_support_probs(_normalize_simplex_candidate(y_s), S2, n2)
+    cert = cert_fn(x, y)
+    out.update({"eta": float(cert["eta"]), "x": x, "y": y, "S": (S1, S2), "certificate": cert})
+    out["optimizer_success"] = out["success"]
+    out["success"] = bool(out["violation"] <= 1e-6 and np.isfinite(out["eta"]))
+    return out
+
+
 def supported_profile_gap_msd_dual(
     A_list,
     B_list,
@@ -792,6 +813,7 @@ def supported_profile_gap_msd_dual(
     x0=None,
     y0=None,
     maxiter: int = 1000,
+    target_eta: float | None = None,
 ):
     """Minimize supported MSD regret using dualized best-response constraints."""
 
@@ -919,6 +941,20 @@ def supported_profile_gap_msd_dual(
         + [(0.0, float(gamma * pk)) for pk in p]
     )
 
+    def certify_candidate(x, y):
+        return full_msd_regret(A, B, p, gamma, x, y)
+
+    def finalize_candidate(candidate):
+        return _finalize_supported_gap_candidate(
+            candidate,
+            unpack=unpack,
+            S1=S1,
+            S2=S2,
+            n1=n1,
+            n2=n2,
+            cert_fn=certify_candidate,
+        )
+
     best = None
     for start in starts:
         res = minimize(
@@ -948,16 +984,13 @@ def supported_profile_gap_msd_dual(
             best["violation"],
         ):
             best = candidate
+        if target_eta is not None and candidate["success"] and violation <= 1e-6 and np.isfinite(candidate["dual_eta"]):
+            certified = finalize_candidate(candidate)
+            if certified["success"] and certified["eta"] <= target_eta:
+                return certified
 
     assert best is not None
-    x_s, y_s, *_ = unpack(best["result_x"])
-    x = expand_support_probs(_normalize_simplex_candidate(x_s), S1, n1)
-    y = expand_support_probs(_normalize_simplex_candidate(y_s), S2, n2)
-    cert = full_msd_regret(A, B, p, gamma, x, y)
-    best.update({"eta": float(cert["eta"]), "x": x, "y": y, "S": (S1, S2), "certificate": cert})
-    best["optimizer_success"] = best["success"]
-    best["success"] = bool(best["violation"] <= 1e-6 and np.isfinite(best["eta"]))
-    return best
+    return finalize_candidate(best)
 
 
 def supported_profile_gap_cvar_dual(
@@ -972,6 +1005,7 @@ def supported_profile_gap_cvar_dual(
     x0=None,
     y0=None,
     maxiter: int = 1000,
+    target_eta: float | None = None,
 ):
     """Minimize supported CVaR regret using dualized best-response constraints."""
 
@@ -1114,6 +1148,20 @@ def supported_profile_gap_cvar_dual(
         + [(0.0, float(ck)) for ck in cap]
     )
 
+    def certify_candidate(x, y):
+        return full_cvar_regret(A, B, p, gamma, alpha, x, y)
+
+    def finalize_candidate(candidate):
+        return _finalize_supported_gap_candidate(
+            candidate,
+            unpack=unpack,
+            S1=S1,
+            S2=S2,
+            n1=n1,
+            n2=n2,
+            cert_fn=certify_candidate,
+        )
+
     best = None
     for start in starts:
         res = minimize(
@@ -1143,16 +1191,13 @@ def supported_profile_gap_cvar_dual(
             best["violation"],
         ):
             best = candidate
+        if target_eta is not None and candidate["success"] and violation <= 1e-6 and np.isfinite(candidate["dual_eta"]):
+            certified = finalize_candidate(candidate)
+            if certified["success"] and certified["eta"] <= target_eta:
+                return certified
 
     assert best is not None
-    x_s, y_s, *_ = unpack(best["result_x"])
-    x = expand_support_probs(_normalize_simplex_candidate(x_s), S1, n1)
-    y = expand_support_probs(_normalize_simplex_candidate(y_s), S2, n2)
-    cert = full_cvar_regret(A, B, p, gamma, alpha, x, y)
-    best.update({"eta": float(cert["eta"]), "x": x, "y": y, "S": (S1, S2), "certificate": cert})
-    best["optimizer_success"] = best["success"]
-    best["success"] = bool(best["violation"] <= 1e-6 and np.isfinite(best["eta"]))
-    return best
+    return finalize_candidate(best)
 
 
 def _certified_search(
@@ -1201,16 +1246,20 @@ def _certified_search(
             if screen["success"] and screen["eta"] <= epsilon_scr:
                 # Screening certifies only the support pair; the returned profile
                 # must minimize full-game regret over the action support.
-                support_cert = support_gap_fn(
+                support_cert = _call_support_gap(
+                    support_gap_fn,
                     A,
                     B,
                     p,
-                    S=screen["S"],
-                    n_starts=config.n_regret_starts,
-                    seed=config.seed + idx,
-                    x0=screen["x"],
-                    y0=screen["y"],
-                    **regret_kwargs,
+                    {
+                        **regret_kwargs,
+                        "S": screen["S"],
+                        "n_starts": config.n_regret_starts,
+                        "seed": config.seed + idx,
+                        "x0": screen["x"],
+                        "y0": screen["y"],
+                        "target_eta": config.epsilon,
+                    },
                 )
                 candidate = {
                     "screen": screen,
@@ -1316,6 +1365,7 @@ def _action_support_search(
                 "solver": config.solver,
                 "fallback_solver": config.fallback_solver,
                 "solver_options": config.solver_options,
+                "target_eta": config.epsilon,
                 **extra_gap_kwargs,
             }
             support_cert = _call_support_gap(support_gap_fn, A, B, p, call_kwargs)

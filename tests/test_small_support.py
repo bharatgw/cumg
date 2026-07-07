@@ -1,6 +1,9 @@
+from types import SimpleNamespace
+
 import numpy as np
 import pytest
 
+import cumg.small_support as small_support
 from cumg.results import SupportSearchConfig
 from cumg.small_support import (
     _certified_search,
@@ -80,9 +83,7 @@ def test_full_msd_regret_lp_finds_mixed_best_response():
     )
 
     assert cert["regret1"] == pytest.approx(0.5, abs=1e-8)
-    np.testing.assert_allclose(
-        cert["best_dev1"]["strategy"], np.array([0.5, 0.5]), atol=1e-8
-    )
+    np.testing.assert_allclose(cert["best_dev1"]["strategy"], np.array([0.5, 0.5]), atol=1e-8)
 
 
 def test_full_cvar_regret_lp_finds_mixed_best_response():
@@ -100,9 +101,7 @@ def test_full_cvar_regret_lp_finds_mixed_best_response():
     )
 
     assert cert["regret1"] == pytest.approx(1.0, abs=1e-8)
-    np.testing.assert_allclose(
-        cert["best_dev1"]["strategy"], np.array([0.5, 0.5]), atol=1e-8
-    )
+    np.testing.assert_allclose(cert["best_dev1"]["strategy"], np.array([0.5, 0.5]), atol=1e-8)
 
 
 def test_restricted_profile_gap_msd_returns_screen_certificate():
@@ -189,6 +188,33 @@ def test_dualized_supported_profile_gap_msd_finds_supported_equilibrium():
     np.testing.assert_allclose(out["y"], np.array([0.5, 0.5]), atol=1e-6)
 
 
+def test_dualized_supported_profile_gap_msd_stops_after_certified_target(monkeypatch):
+    A = [np.array([[1.0, -1.0], [-1.0, 1.0]])]
+    B = [-A[0]]
+    calls = []
+    result_x = np.array([0.5, 0.5, 0.5, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.25, 0.25])
+
+    def fake_minimize(*args, **kwargs):
+        calls.append((args, kwargs))
+        return SimpleNamespace(x=result_x, success=True, message="ok")
+
+    monkeypatch.setattr(small_support, "minimize", fake_minimize)
+
+    out = supported_profile_gap_msd_dual(
+        A,
+        B,
+        np.array([1.0]),
+        gamma=0.5,
+        S=((0, 1), (0, 1)),
+        n_starts=5,
+        target_eta=1e-8,
+    )
+
+    assert len(calls) == 1
+    assert out["success"]
+    assert out["eta"] == pytest.approx(0.0, abs=1e-8)
+
+
 def test_dualized_supported_profile_gap_cvar_finds_supported_equilibrium():
     A = [np.array([[1.0, -1.0], [-1.0, 1.0]])]
     B = [-A[0]]
@@ -211,6 +237,34 @@ def test_dualized_supported_profile_gap_cvar_finds_supported_equilibrium():
     np.testing.assert_allclose(out["y"], np.array([0.5, 0.5]), atol=1e-6)
 
 
+def test_dualized_supported_profile_gap_cvar_stops_after_certified_target(monkeypatch):
+    A = [np.array([[1.0, -1.0], [-1.0, 1.0]])]
+    B = [-A[0]]
+    calls = []
+    result_x = np.array([0.5, 0.5, 0.5, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.5])
+
+    def fake_minimize(*args, **kwargs):
+        calls.append((args, kwargs))
+        return SimpleNamespace(x=result_x, success=True, message="ok")
+
+    monkeypatch.setattr(small_support, "minimize", fake_minimize)
+
+    out = supported_profile_gap_cvar_dual(
+        A,
+        B,
+        np.array([1.0]),
+        gamma=0.5,
+        alpha=1.0,
+        S=((0, 1), (0, 1)),
+        n_starts=5,
+        target_eta=1e-8,
+    )
+
+    assert len(calls) == 1
+    assert out["success"]
+    assert out["eta"] == pytest.approx(0.0, abs=1e-8)
+
+
 def test_action_support_search_msd_with_dual_backend_finds_supported_equilibrium():
     A = [np.array([[1.0, -1.0], [-1.0, 1.0]])]
     B = [-A[0]]
@@ -223,9 +277,7 @@ def test_action_support_search_msd_with_dual_backend_finds_supported_equilibrium
         seed=0,
     )
 
-    out = small_support_action_search_msd(
-        A, B, np.array([1.0]), gamma=0.5, config=config
-    )
+    out = small_support_action_search_msd(A, B, np.array([1.0]), gamma=0.5, config=config)
 
     assert out.success, out.best_error
     assert out.scenarios is None
