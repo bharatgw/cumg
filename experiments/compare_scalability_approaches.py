@@ -73,6 +73,10 @@ def simulate_random_payoffs(
     return A, B, p
 
 
+def experiment_seed(risk: str, K: int, n: int, rep: int, seed_base: int) -> int:
+    return seed_base + 1_000_000 * RISKS.index(risk) + 10_000 * K + 100 * n + rep
+
+
 def _none_if_nonpositive_float(value: float | None) -> float | None:
     if value is None or value <= 0:
         return None
@@ -532,7 +536,7 @@ def run_instance(
     return row
 
 
-def _rep_indices(args: argparse.Namespace) -> range:
+def rep_indices(args: argparse.Namespace) -> range:
     rep_stop = args.rep_stop if args.rep_stop is not None else args.reps
     if args.reps < 0:
         raise ValueError("reps must be nonnegative.")
@@ -550,18 +554,12 @@ def run_experiment(
     row_callback: Callable[[dict[str, Any]], None] | None = None,
 ) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
-    rep_indices = _rep_indices(args)
+    rep_range = rep_indices(args)
     for risk in args.risk:
         for K in args.K:
             for n in args.n:
-                for rep in rep_indices:
-                    seed = (
-                        args.seed_base
-                        + 1_000_000 * RISKS.index(risk)
-                        + 10_000 * K
-                        + 100 * n
-                        + rep
-                    )
+                for rep in rep_range:
+                    seed = experiment_seed(risk, K, n, rep, args.seed_base)
                     row = run_instance(args, risk, K, n, seed)
                     rows.append(row)
                     if row_callback is not None:
@@ -681,7 +679,7 @@ def parse_args() -> argparse.Namespace:
         args.fallback_solver = None
     args.path_options = DEFAULT_PATH_OPTIONS.copy()
     try:
-        _rep_indices(args)
+        rep_indices(args)
     except ValueError as exc:
         parser.error(str(exc))
     return args
