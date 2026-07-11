@@ -34,4 +34,31 @@ These CSV files are intentionally tracked in git for reproducibility, but they a
 4. Write new intermediate outputs to `experiments/tmp/` or `experiments/scratch/`; those paths are ignored.
 5. Promote only curated, documented CSV outputs into `experiments/results/`.
 
+### Stochastic Hyperparameter Pilot
+
+Run a small fixed-seed grid before launching the full scalability experiment:
+
+```bash
+python experiments/compare_stochastic_fo_msd.py \
+  --K 30 100 \
+  --n 20 \
+  --reps 1 \
+  --entropy-kappa-grid 0.05 0.01 0.002 \
+  --smoothing-tau-grid 0.1 0.02 0.005 \
+  --step-size-grid 0.01 0.05 0.2 \
+  --max-iter 300 \
+  --record-every 25 \
+  --certify-every 25 \
+  --regret-tolerance 0.001 \
+  --csv experiments/results/stochastic/pilot_summary.csv \
+  --history-csv experiments/results/stochastic/pilot_history.csv \
+  --quiet
+```
+
+The summary CSV records every stochastic hyperparameter and the iteration of
+the best exact-regret certificate. The history CSV records residual norm,
+objective, exact eta, and player regrets at each shared record/certification
+checkpoint. Grid values form a Cartesian product and all configurations reuse
+the same game seeds.
+
 Large third-party solver distributions, PDFs, and archives were removed from the publishable tree. Local copies, if present, live under `.local/removed_artifacts/` and are ignored by git.

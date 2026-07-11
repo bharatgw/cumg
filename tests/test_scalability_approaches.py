@@ -56,8 +56,14 @@ def base_args(methods):
 
 @pytest.mark.parametrize("risk", ["msd", "cvar"])
 def test_scalability_driver_records_non_solver_methods(risk):
-    methods = ["screened_dual", "action_dual", "stochastic_full_batch", "stochastic_minibatch"]
-    row = compare_scalability_approaches.run_instance(base_args(methods), risk=risk, K=2, n=2, seed=0)
+    methods = [
+        "screened_dual",
+        "action_dual",
+        "stochastic_full_batch",
+        "stochastic_minibatch",
+    ]
+    args = base_args(methods)
+    row = compare_scalability_approaches.run_instance(args, risk=risk, K=2, n=2, seed=0)
 
     assert row["risk"] == risk
     for method in methods:
@@ -70,6 +76,28 @@ def test_scalability_driver_records_non_solver_methods(risk):
         assert np.isfinite(row[f"{method}_time_s"])
     assert np.isfinite(row["eta_diff_stochastic_minibatch_minus_full_batch"])
     assert np.isfinite(row["time_ratio_stochastic_minibatch_over_full_batch"])
+    assert row["support_kappa"] == row["kappa"]
+    assert row["support_tau"] == row["tau"]
+    assert row["stochastic_entropy_kappa"] == args.entropy_kappa
+    assert row["stochastic_smoothing_tau"] == args.smoothing_tau
+    assert row["stochastic_step_size"] == args.step_size
+    assert row["stochastic_step_decay"] == args.step_decay
+    assert row["stochastic_record_every"] == args.record_every
+    assert row["stochastic_certify_every"] == args.certify_every
+
+
+def test_scalability_driver_records_best_certificate_iteration():
+    args = base_args(["stochastic_full_batch"])
+    args.risk = ["msd"]
+    args.gamma = 0.0
+    args.max_iter = 0
+    args.certify_every = 1
+
+    row = compare_scalability_approaches.run_instance(
+        args, risk="msd", K=2, n=2, seed=0
+    )
+
+    assert row["stochastic_full_batch_best_certificate_iteration"] == 0
 
 
 def test_scalability_driver_records_mcp_errors(monkeypatch):
@@ -80,7 +108,9 @@ def test_scalability_driver_records_mcp_errors(monkeypatch):
 
     monkeypatch.setattr(compare_scalability_approaches, "solve_msd_mcp", fail_mcp)
 
-    row = compare_scalability_approaches.run_instance(args, risk="msd", K=2, n=2, seed=0)
+    row = compare_scalability_approaches.run_instance(
+        args, risk="msd", K=2, n=2, seed=0
+    )
 
     assert not row["mcp_success"]
     assert not row["mcp_has_profile"]
@@ -108,7 +138,9 @@ def test_scalability_driver_default_rep_range_preserves_seed_formula(monkeypatch
     def fake_run_instance(args, risk, K, n, seed):
         return {"risk": risk, "K": K, "n": n, "seed": seed}
 
-    monkeypatch.setattr(compare_scalability_approaches, "run_instance", fake_run_instance)
+    monkeypatch.setattr(
+        compare_scalability_approaches, "run_instance", fake_run_instance
+    )
 
     rows = compare_scalability_approaches.run_experiment(args)
 
@@ -127,7 +159,9 @@ def test_scalability_driver_rep_shard_uses_absolute_rep_indices(monkeypatch):
     def fake_run_instance(args, risk, K, n, seed):
         return {"risk": risk, "K": K, "n": n, "seed": seed}
 
-    monkeypatch.setattr(compare_scalability_approaches, "run_instance", fake_run_instance)
+    monkeypatch.setattr(
+        compare_scalability_approaches, "run_instance", fake_run_instance
+    )
 
     rows = compare_scalability_approaches.run_experiment(args)
 
@@ -145,10 +179,14 @@ def test_scalability_driver_streams_valid_csv_rows(tmp_path, monkeypatch):
     def fake_run_instance(args, risk, K, n, seed):
         return {"risk": risk, "K": K, "n": n, "seed": seed, "status": "done"}
 
-    monkeypatch.setattr(compare_scalability_approaches, "run_instance", fake_run_instance)
+    monkeypatch.setattr(
+        compare_scalability_approaches, "run_instance", fake_run_instance
+    )
 
     with compare_scalability_approaches.StreamingCsvWriter(csv_path) as writer:
-        rows = compare_scalability_approaches.run_experiment(args, row_callback=writer.write_row)
+        rows = compare_scalability_approaches.run_experiment(
+            args, row_callback=writer.write_row
+        )
 
     with csv_path.open(newline="") as f:
         csv_rows = list(csv.DictReader(f))

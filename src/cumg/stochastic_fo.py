@@ -374,6 +374,7 @@ def _record_history(
     full_batch,
     jax,
     include_theta: bool,
+    certificate_checkpoint: dict[str, Any] | None = None,
 ) -> tuple[float, float]:
     x, y = _params_to_profile(jax, params)
     residual_norm, objective = _full_residual_stats(residual_fn, params, full_batch)
@@ -386,6 +387,15 @@ def _record_history(
     }
     if include_theta:
         row["theta"] = _params_to_theta(params)
+    if certificate_checkpoint is not None:
+        certificate = certificate_checkpoint["certificate"]
+        row.update(
+            {
+                "eta": float(certificate_checkpoint["eta"]),
+                "regret1": float(certificate.get("regret1", np.nan)),
+                "regret2": float(certificate.get("regret2", np.nan)),
+            }
+        )
     history.append(row)
     return residual_norm, objective
 
@@ -470,19 +480,26 @@ def _run_stochastic_fo(
     )
     best_certificate = None
     completed_iterations = 0
+    checkpoint = None
+    
     if config.certify_every is not None:
         checkpoint = _certify_checkpoint(
             certifier, 0, params, residual_norm, objective, jax, include_theta
         )
         best_certificate = _maybe_update_best_certificate(best_certificate, checkpoint)
+        if config.record_every is not None:
+            _record_history(
+                history,
+                0,
+                params,
+                residual_fn,
+                full_batch,
+                jax,
+                include_theta,
+                checkpoint,
+            )
         if checkpoint is not None and checkpoint["eta"] <= config.regret_tolerance:
-            if config.record_every is not None:
-                _record_history(
-                    history, 0, params, residual_fn, full_batch, jax, include_theta
-                )
             return params, best, best_certificate, history, completed_iterations
-    if config.record_every is not None:
-        _record_history(history, 0, params, residual_fn, full_batch, jax, include_theta)
 
     for iteration in range(config.max_iter):
         batch1 = jnp.asarray(_draw_batch(rng, K, batch_size))
@@ -522,23 +539,11 @@ def _run_stochastic_fo(
                 jax,
                 include_theta,
             )
-            if (
-                config.record_every is not None
-                and (iteration + 1) % config.record_every == 0
-            ):
-                _record_history(
-                    history,
-                    completed_iterations,
-                    params,
-                    residual_fn,
-                    full_batch,
-                    jax,
-                    include_theta,
-                )
             should_certify = config.certify_every is not None and (
                 completed_iterations % config.certify_every == 0
                 or completed_iterations == config.max_iter
             )
+            checkpoint = None
             if should_certify:
                 checkpoint = _certify_checkpoint(
                     certifier,
@@ -552,6 +557,21 @@ def _run_stochastic_fo(
                 best_certificate = _maybe_update_best_certificate(
                     best_certificate, checkpoint
                 )
+            if (
+                config.record_every is not None
+                and (iteration + 1) % config.record_every == 0
+            ):
+                _record_history(
+                    history,
+                    completed_iterations,
+                    params,
+                    residual_fn,
+                    full_batch,
+                    jax,
+                    include_theta,
+                    checkpoint,
+                )
+            if should_certify:
                 if (
                     checkpoint is not None
                     and checkpoint["eta"] <= config.regret_tolerance

@@ -32,11 +32,15 @@ def test_stochastic_fo_rejects_invalid_parameters():
     with pytest.raises(ValueError, match="alpha"):
         solve_cvar_stochastic_fo(A, B, p, gamma=0.0, alpha=0.0)
     with pytest.raises(ValueError, match="kappa"):
-        solve_msd_stochastic_fo(A, B, p, gamma=0.0, config=StochasticFOConfig(kappa=0.0))
+        solve_msd_stochastic_fo(
+            A, B, p, gamma=0.0, config=StochasticFOConfig(kappa=0.0)
+        )
     with pytest.raises(ValueError, match="tau"):
         solve_msd_stochastic_fo(A, B, p, gamma=0.0, config=StochasticFOConfig(tau=0.0))
     with pytest.raises(ValueError, match="batch_size"):
-        solve_msd_stochastic_fo(A, B, p, gamma=0.0, config=StochasticFOConfig(batch_size=0))
+        solve_msd_stochastic_fo(
+            A, B, p, gamma=0.0, config=StochasticFOConfig(batch_size=0)
+        )
 
 
 def test_msd_stochastic_fo_finds_matching_pennies_equilibrium_with_gamma_zero():
@@ -137,3 +141,8 @@ def test_certify_every_records_best_certificate_and_stops_when_regret_is_small()
     assert result.best_certificate is not None
     assert result.best_certificate["eta"] == pytest.approx(0.0, abs=1e-8)
     assert result.best_certificate["certificate"]["eta"] == pytest.approx(0.0, abs=1e-8)
+    assert result.best_certificate["iteration"] == 0
+    assert result.history[0]["iteration"] == 0
+    assert result.history[0]["eta"] == pytest.approx(0.0, abs=1e-8)
+    assert result.history[0]["regret1"] == pytest.approx(0.0, abs=1e-8)
+    assert result.history[0]["regret2"] == pytest.approx(0.0, abs=1e-8)

@@ -77,19 +77,19 @@ def experiment_seed(risk: str, K: int, n: int, rep: int, seed_base: int) -> int:
     return seed_base + 1_000_000 * RISKS.index(risk) + 10_000 * K + 100 * n + rep
 
 
-def _none_if_nonpositive_float(value: float | None) -> float | None:
+def optional_positive_float(value: float | None) -> float | None:
     if value is None or value <= 0:
         return None
     return value
 
 
-def _none_if_nonpositive_int(value: int | None) -> int | None:
+def optional_positive_int(value: int | None) -> int | None:
     if value is None or value <= 0:
         return None
     return value
 
 
-def _minibatch_size(args: argparse.Namespace, K: int) -> int:
+def stochastic_minibatch_size(args: argparse.Namespace, K: int) -> int:
     if args.batch_size is not None:
         return max(1, min(K, args.batch_size))
     return max(1, min(K, int(np.ceil(np.sqrt(K)))))
@@ -131,7 +131,7 @@ def _stochastic_config(
     if method == "stochastic_full_batch":
         batch_size = None
     elif method == "stochastic_minibatch":
-        batch_size = _minibatch_size(args, K)
+        batch_size = stochastic_minibatch_size(args, K)
     else:
         raise ValueError(f"Unknown stochastic method: {method}")
     return StochasticFOConfig(
@@ -142,10 +142,10 @@ def _stochastic_config(
         step_size=args.step_size,
         step_decay=args.step_decay,
         seed=seed,
-        logit_bound=_none_if_nonpositive_float(args.logit_bound),
-        gradient_clip_norm=_none_if_nonpositive_float(args.gradient_clip_norm),
-        record_every=_none_if_nonpositive_int(args.record_every),
-        certify_every=_none_if_nonpositive_int(args.certify_every),
+        logit_bound=optional_positive_float(args.logit_bound),
+        gradient_clip_norm=optional_positive_float(args.gradient_clip_norm),
+        record_every=optional_positive_int(args.record_every),
+        certify_every=optional_positive_int(args.certify_every),
         regret_tolerance=args.epsilon,
     )
 
@@ -188,6 +188,7 @@ def _empty_method_metrics(
         f"{prefix}_objective": np.nan,
         f"{prefix}_iterations": None,
         f"{prefix}_best_certificate_eta": np.nan,
+        f"{prefix}_best_certificate_iteration": None,
     }
 
 
@@ -278,6 +279,7 @@ def _stochastic_result_metrics(
             f"{prefix}_best_certificate_eta": float(
                 best_certificate.get("eta", np.nan)
             ),
+            f"{prefix}_best_certificate_iteration": best_certificate.get("iteration"),
         }
     )
     return out
@@ -514,6 +516,8 @@ def run_instance(
         "alpha": args.alpha if risk == "cvar" else np.nan,
         "epsilon": args.epsilon,
         "epsilon_scr": support_config.epsilon_scr,
+        "support_kappa": kappa,
+        "support_tau": tau,
         "kappa": kappa,
         "tau": tau,
         "max_candidates": args.max_candidates,
@@ -522,7 +526,15 @@ def run_instance(
         "screen_maxiter": args.screen_maxiter,
         "support_maxiter": args.support_maxiter,
         "stochastic_max_iter": args.max_iter,
-        "stochastic_minibatch_size": _minibatch_size(args, K),
+        "stochastic_minibatch_size": stochastic_minibatch_size(args, K),
+        "stochastic_entropy_kappa": args.entropy_kappa,
+        "stochastic_smoothing_tau": args.smoothing_tau,
+        "stochastic_step_size": args.step_size,
+        "stochastic_step_decay": args.step_decay,
+        "stochastic_logit_bound": args.logit_bound,
+        "stochastic_gradient_clip_norm": args.gradient_clip_norm,
+        "stochastic_record_every": args.record_every,
+        "stochastic_certify_every": args.certify_every,
         "methods": ",".join(args.methods),
     }
     results: dict[str, Any] = {}

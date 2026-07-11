@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import argparse
-import csv
 import sys
+from collections.abc import Callable, Iterator
+from contextlib import ExitStack
+from itertools import product
 from pathlib import Path
 from time import perf_counter
 from typing import Any
@@ -13,42 +15,21 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
-if str(SRC) not in sys.path:
-    sys.path.insert(0, str(SRC))
+EXPERIMENTS = ROOT / "experiments"
+for import_path in (SRC, EXPERIMENTS):
+    if str(import_path) not in sys.path:
+        sys.path.insert(0, str(import_path))
+
+from compare_scalability_approaches import (  # noqa: E402
+    StreamingCsvWriter,
+    experiment_seed,
+    optional_positive_float,
+    optional_positive_int,
+    simulate_random_payoffs,
+    stochastic_minibatch_size,
+)
 
 from cumg import StochasticFOConfig, solve_msd_stochastic_fo  # noqa: E402
-
-
-def simulate_random_payoffs(
-    K: int,
-    n: int,
-    seed: int,
-    low: float = 0.0,
-    high: float = 1.0,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    rng = np.random.default_rng(seed)
-    A = rng.uniform(low, high, size=(K, n, n))
-    B = rng.uniform(low, high, size=(K, n, n))
-    p = np.ones(K, dtype=float) / K
-    return A, B, p
-
-
-def _optional_positive_float(value: float | None) -> float | None:
-    if value is None or value <= 0:
-        return None
-    return value
-
-
-def _optional_positive_int(value: int | None) -> int | None:
-    if value is None or value <= 0:
-        return None
-    return value
-
-
-def _minibatch_size(args: argparse.Namespace, K: int) -> int:
-    if args.batch_size is not None:
-        return max(1, min(K, args.batch_size))
-    return max(1, min(K, int(np.ceil(np.sqrt(K)))))
 
 
 def _method_config(
@@ -57,7 +38,7 @@ def _method_config(
     if method == "full_batch":
         batch_size = None
     elif method == "minibatch":
-        batch_size = _minibatch_size(args, K)
+        batch_size = stochastic_minibatch_size(args, K)
     else:
         raise ValueError(f"Unknown method: {method}")
 
@@ -69,10 +50,10 @@ def _method_config(
         step_size=args.step_size,
         step_decay=args.step_decay,
         seed=seed,
-        logit_bound=_optional_positive_float(args.logit_bound),
-        gradient_clip_norm=_optional_positive_float(args.gradient_clip_norm),
-        record_every=_optional_positive_int(args.record_every),
-        certify_every=_optional_positive_int(args.certify_every),
+        logit_bound=optional_positive_float(args.logit_bound),
+        gradient_clip_norm=optional_positive_float(args.gradient_clip_norm),
+        record_every=optional_positive_int(args.record_every),
+        certify_every=optional_positive_int(args.certify_every),
         regret_tolerance=args.regret_tolerance,
     )
 
@@ -124,6 +105,7 @@ def _method_metrics(
         ),
         f"{prefix}_best_objective": float(best_iterate.get("objective", np.nan)),
         f"{prefix}_best_certificate_eta": float(best_certificate.get("eta", np.nan)),
+        f"{prefix}_best_certificate_iteration": best_certificate.get("iteration"),
         f"{prefix}_error": method_error,
     }
 
@@ -162,7 +144,48 @@ def _pairwise_metrics(row: dict[str, Any], results: dict[str, Any]) -> None:
         row["y_l1_minibatch_minus_full_batch"] = np.nan
 
 
-def run_instance(args: argparse.Namespace, K: int, n: int, seed: int) -> dict[str, Any]:
+def _history_rows(
+    args: argparse.Namespace,
+    K: int,
+    n: int,
+    seed: int,
+    method: str,
+    result,
+) -> Iterator[dict[str, Any]]:
+    if result is None:
+        return
+    for checkpoint in result.history:
+        yield {
+            "K": K,
+            "n": n,
+            "seed": seed,
+            "gamma": args.gamma,
+            "entropy_kappa": args.entropy_kappa,
+            "smoothing_tau": args.smoothing_tau,
+            "step_size": args.step_size,
+            "step_decay": args.step_decay,
+            "max_iter": args.max_iter,
+            "minibatch_size": stochastic_minibatch_size(args, K),
+            "regret_tolerance": args.regret_tolerance,
+            "record_every": args.record_every,
+            "certify_every": args.certify_every,
+            "method": method,
+            "iteration": checkpoint["iteration"],
+            "residual_norm": checkpoint["residual_norm"],
+            "objective": checkpoint["objective"],
+            "eta": checkpoint.get("eta", np.nan),
+            "regret1": checkpoint.get("regret1", np.nan),
+            "regret2": checkpoint.get("regret2", np.nan),
+        }
+
+
+def run_instance(
+    args: argparse.Namespace,
+    K: int,
+    n: int,
+    seed: int,
+    history_callback: Callable[[dict[str, Any]], None] | None = None,
+) -> dict[str, Any]:
     A, B, p = simulate_random_payoffs(K=K, n=n, seed=seed, low=args.low, high=args.high)
     row: dict[str, Any] = {
         "K": K,
@@ -172,7 +195,7 @@ def run_instance(args: argparse.Namespace, K: int, n: int, seed: int) -> dict[st
         "entropy_kappa": args.entropy_kappa,
         "smoothing_tau": args.smoothing_tau,
         "max_iter": args.max_iter,
-        "minibatch_size": _minibatch_size(args, K),
+        "minibatch_size": stochastic_minibatch_size(args, K),
         "step_size": args.step_size,
         "step_decay": args.step_decay,
         "regret_tolerance": args.regret_tolerance,
@@ -186,6 +209,9 @@ def run_instance(args: argparse.Namespace, K: int, n: int, seed: int) -> dict[st
         result, elapsed, error = _run_method(method, A, B, p, args.gamma, args, seed)
         results[method] = result
         row.update(_method_metrics(method, result, elapsed, error))
+        if history_callback is not None:
+            for history_row in _history_rows(args, K, n, seed, method, result):
+                history_callback(history_row)
     _pairwise_metrics(row, results)
     return row
 
@@ -232,13 +258,16 @@ def print_summary(rows: list[dict[str, Any]], methods: list[str]) -> None:
             )
 
 
-def write_csv(rows: list[dict[str, Any]], path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fieldnames = list(rows[0])
-    with path.open("w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(rows)
+def iter_tuning_configs(args: argparse.Namespace) -> Iterator[argparse.Namespace]:
+    kappas = args.entropy_kappa_grid or [args.entropy_kappa]
+    taus = args.smoothing_tau_grid or [args.smoothing_tau]
+    step_sizes = args.step_size_grid or [args.step_size]
+    for kappa, tau, step_size in product(kappas, taus, step_sizes):
+        config_args = argparse.Namespace(**vars(args))
+        config_args.entropy_kappa = kappa
+        config_args.smoothing_tau = tau
+        config_args.step_size = step_size
+        yield config_args
 
 
 def parse_args() -> argparse.Namespace:
@@ -249,10 +278,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed-base", type=int, default=123)
     parser.add_argument("--gamma", type=float, default=0.5)
     parser.add_argument("--entropy-kappa", type=float, default=0.2)
+    parser.add_argument("--entropy-kappa-grid", type=float, nargs="+", default=None)
     parser.add_argument("--smoothing-tau", type=float, default=0.05)
+    parser.add_argument("--smoothing-tau-grid", type=float, nargs="+", default=None)
     parser.add_argument("--max-iter", type=int, default=1000)
     parser.add_argument("--batch-size", type=int, default=None)
     parser.add_argument("--step-size", type=float, default=0.2)
+    parser.add_argument("--step-size-grid", type=float, nargs="+", default=None)
     parser.add_argument("--step-decay", type=float, default=0.5)
     parser.add_argument("--logit-bound", type=float, default=20.0)
     parser.add_argument("--gradient-clip-norm", type=float, default=None)
@@ -268,31 +300,66 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--low", type=float, default=0.0)
     parser.add_argument("--high", type=float, default=1.0)
     parser.add_argument("--csv", type=Path, default=None)
+    parser.add_argument("--history-csv", type=Path, default=None)
     parser.add_argument("--quiet", action="store_true")
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.history_csv is not None and args.record_every <= 0:
+        parser.error("--history-csv requires a positive --record-every")
+    return args
 
 
 def main() -> None:
     args = parse_args()
     rows = []
-    for K in args.K:
-        for n in args.n:
-            for rep in range(args.reps):
-                seed = args.seed_base + 10_000 * K + 100 * n + rep
-                row = run_instance(args, K, n, seed)
-                rows.append(row)
-                if not args.quiet:
-                    method_parts = [
-                        f"{method}: success={row[f'{method}_success']} eta={row[f'{method}_eta']:.4g} "
-                        f"resid={row[f'{method}_residual_norm']:.4g} time={row[f'{method}_time_s']:.3f}s"
-                        for method in args.methods
-                    ]
-                    print(f"K={K:>3} n={n:>3} rep={rep:>2} " + " | ".join(method_parts))
+    with ExitStack() as stack:
+        result_writer = (
+            stack.enter_context(StreamingCsvWriter(args.csv))
+            if args.csv is not None
+            else None
+        )
+        history_writer = (
+            stack.enter_context(StreamingCsvWriter(args.history_csv))
+            if args.history_csv is not None
+            else None
+        )
+        history_callback = (
+            history_writer.write_row if history_writer is not None else None
+        )
+
+        for config_args in iter_tuning_configs(args):
+            for K in args.K:
+                for n in args.n:
+                    for rep in range(args.reps):
+                        seed = experiment_seed("msd", K, n, rep, args.seed_base)
+                        row = run_instance(
+                            config_args,
+                            K,
+                            n,
+                            seed,
+                            history_callback=history_callback,
+                        )
+                        rows.append(row)
+                        if result_writer is not None:
+                            result_writer.write_row(row)
+                        if not args.quiet:
+                            method_parts = [
+                                f"{method}: success={row[f'{method}_success']} eta={row[f'{method}_eta']:.4g} "
+                                f"resid={row[f'{method}_residual_norm']:.4g} time={row[f'{method}_time_s']:.3f}s"
+                                for method in args.methods
+                            ]
+                            print(
+                                f"kappa={config_args.entropy_kappa:g} "
+                                f"tau={config_args.smoothing_tau:g} "
+                                f"step={config_args.step_size:g} "
+                                f"K={K:>3} n={n:>3} rep={rep:>2} "
+                                + " | ".join(method_parts)
+                            )
 
     print_summary(rows, args.methods)
     if args.csv is not None:
-        write_csv(rows, args.csv)
         print(f"\nwrote {args.csv}")
+    if args.history_csv is not None:
+        print(f"wrote {args.history_csv}")
 
 
 if __name__ == "__main__":
