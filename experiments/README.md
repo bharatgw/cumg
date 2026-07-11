@@ -63,4 +63,36 @@ thresholds at each shared record/certification checkpoint. Grid values form a
 Cartesian product and all configurations reuse the same game seeds within each
 risk model.
 
+### Stochastic Continuation
+
+Use continuation when a fixed smoothing and entropy level reduces the residual
+but stalls above the exact-regret target:
+
+```bash
+python experiments/compare_stochastic_fo.py \
+  --risk msd cvar \
+  --K 30 100 250 \
+  --n 20 \
+  --reps 3 \
+  --continuation-kappa 0.1 0.03 0.01 0.003 \
+  --continuation-tau 0.02 0.01 0.005 0.002 \
+  --continuation-max-iter 2000 2000 2000 2000 \
+  --step-size-grid 2 3 4 \
+  --step-decay 0.5 \
+  --record-every 100 \
+  --certify-every 100 \
+  --regret-tolerance 0.001 \
+  --csv experiments/results/stochastic/continuation_summary.csv \
+  --history-csv experiments/results/stochastic/continuation_history.csv \
+  --quiet
+```
+
+Each stage warm-starts from the preceding stage's best certified profile and
+restarts the step-size decay counter. CVaR also carries forward both threshold
+variables. The summary reports the lowest exact eta found across all stages;
+it also records that certificate's selected stage, kappa, and tau. History rows
+include local and cumulative iteration numbers plus the stage's kappa and tau.
+A method stops before later stages when it already meets the requested regret
+tolerance.
+
 Large third-party solver distributions, PDFs, and archives were removed from the publishable tree. Local copies, if present, live under `.local/removed_artifacts/` and are ignored by git.

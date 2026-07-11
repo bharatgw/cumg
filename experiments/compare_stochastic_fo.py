@@ -37,7 +37,44 @@ from cumg import (  # noqa: E402
 )
 
 
-def _method_config(args: argparse.Namespace, K: int, seed: int, method: str) -> StochasticFOConfig:
+def _continuation_stages(args: argparse.Namespace) -> list[tuple[float, float, int]]:
+    kappas = getattr(args, "continuation_kappa", None)
+    taus = getattr(args, "continuation_tau", None)
+    max_iters = getattr(args, "continuation_max_iter", None)
+    if kappas is None and taus is None and max_iters is None:
+        return [(args.entropy_kappa, args.smoothing_tau, args.max_iter)]
+    if kappas is None or taus is None:
+        raise ValueError("continuation requires both --continuation-kappa and --continuation-tau")
+    if args.entropy_kappa_grid is not None or args.smoothing_tau_grid is not None:
+        raise ValueError("continuation cannot be combined with kappa or tau tuning grids")
+    if len(kappas) != len(taus):
+        raise ValueError("continuation kappa and tau schedules must have the same length")
+    if max_iters is None:
+        max_iters = [args.max_iter] * len(kappas)
+    if len(max_iters) != len(kappas):
+        raise ValueError("continuation max-iter schedule must match the kappa and tau schedules")
+    if not kappas:
+        raise ValueError("continuation schedules cannot be empty")
+    if any(not np.isfinite(value) or value <= 0 for value in (*kappas, *taus)):
+        raise ValueError("continuation kappa and tau values must be finite and positive")
+    if any(value < 0 for value in max_iters):
+        raise ValueError("continuation max-iter values must be nonnegative")
+    return list(zip(kappas, taus, max_iters, strict=True))
+
+
+def _method_config(
+    args: argparse.Namespace,
+    K: int,
+    seed: int,
+    method: str,
+    *,
+    kappa: float | None = None,
+    tau: float | None = None,
+    max_iter: int | None = None,
+    x0=None,
+    y0=None,
+    theta0=None,
+) -> StochasticFOConfig:
     if method == "full_batch":
         batch_size = None
     elif method == "minibatch":
@@ -46,15 +83,18 @@ def _method_config(args: argparse.Namespace, K: int, seed: int, method: str) -> 
         raise ValueError(f"Unknown method: {method}")
 
     return StochasticFOConfig(
-        kappa=args.entropy_kappa,
-        tau=args.smoothing_tau,
-        max_iter=args.max_iter,
+        kappa=args.entropy_kappa if kappa is None else kappa,
+        tau=args.smoothing_tau if tau is None else tau,
+        max_iter=args.max_iter if max_iter is None else max_iter,
         batch_size=batch_size,
         step_size=args.step_size,
         step_decay=args.step_decay,
         seed=seed,
         logit_bound=optional_positive_float(args.logit_bound),
         gradient_clip_norm=optional_positive_float(args.gradient_clip_norm),
+        x0=x0,
+        y0=y0,
+        theta0=theta0,
         record_every=optional_positive_int(args.record_every),
         certify_every=optional_positive_int(args.certify_every),
         regret_tolerance=args.regret_tolerance,
@@ -73,37 +113,103 @@ def _run_method(
     seed: int,
 ):
     start = perf_counter()
-    config = _method_config(args, A.shape[0], seed, name)
-    if risk == "msd":
-        result = solve_msd_stochastic_fo(A, B, p, gamma=gamma, config=config)
-    else:
-        result = solve_cvar_stochastic_fo(A, B, p, gamma=gamma, alpha=alpha, config=config)
-    return result, perf_counter() - start, None
+    stage_runs = []
+    iteration_offset = 0
+    x0 = None
+    y0 = None
+    theta0 = None
+    for stage, (kappa, tau, max_iter) in enumerate(_continuation_stages(args)):
+        config = _method_config(
+            args,
+            A.shape[0],
+            seed,
+            name,
+            kappa=kappa,
+            tau=tau,
+            max_iter=max_iter,
+            x0=x0,
+            y0=y0,
+            theta0=theta0,
+        )
+        if risk == "msd":
+            result = solve_msd_stochastic_fo(A, B, p, gamma=gamma, config=config)
+        else:
+            result = solve_cvar_stochastic_fo(A, B, p, gamma=gamma, alpha=alpha, config=config)
+        stage_runs.append(
+            {
+                "stage": stage,
+                "kappa": kappa,
+                "tau": tau,
+                "max_iter": max_iter,
+                "iteration_offset": iteration_offset,
+                "result": result,
+            }
+        )
+        iteration_offset += result.iterations
+        if result.success:
+            break
+        x0 = result.x
+        y0 = result.y
+        theta0 = result.theta
+
+    selected_run = min(
+        stage_runs,
+        key=lambda run: np.nan_to_num(
+            float(run["result"].certificate.get("eta", np.inf)),
+            nan=np.inf,
+            posinf=np.inf,
+            neginf=np.inf,
+        ),
+    )
+    selected_run["selected"] = True
+    return selected_run["result"], perf_counter() - start, None, stage_runs
 
 
-def _method_metrics(prefix: str, result, elapsed_s: float, error: str | None = None) -> dict[str, Any]:
+def _method_metrics(
+    prefix: str,
+    result,
+    elapsed_s: float,
+    error: str | None = None,
+    stage_runs: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     cert = result.certificate if result is not None else {}
     best_iterate = result.best_iterate if result is not None else {}
     best_certificate = result.best_certificate if result is not None and result.best_certificate is not None else {}
     theta = result.theta if result is not None and result.theta is not None else (np.nan, np.nan)
+    stage_runs = stage_runs or []
+    selected_run = next((run for run in stage_runs if run.get("selected")), None)
+    total_iterations = sum(run["result"].iterations for run in stage_runs)
+    total_solve_time = sum(run["result"].solve_time_s for run in stage_runs)
+    total_history_len = sum(len(run["result"].history) for run in stage_runs)
+    selected_stage = selected_run["stage"] if selected_run is not None else 0
+    selected_offset = selected_run["iteration_offset"] if selected_run is not None else 0
+    selected_kappa = selected_run["kappa"] if selected_run is not None else np.nan
+    selected_tau = selected_run["tau"] if selected_run is not None else np.nan
+    certificate_iteration = best_certificate.get("iteration")
+    if certificate_iteration is not None:
+        certificate_iteration += selected_offset
     method_error = error
 
     return {
         f"{prefix}_success": bool(result.success) if result is not None else False,
         f"{prefix}_time_s": elapsed_s,
-        f"{prefix}_solve_time_s": (float(result.solve_time_s) if result is not None else np.nan),
+        f"{prefix}_solve_time_s": float(total_solve_time) if stage_runs else float(result.solve_time_s),
         f"{prefix}_eta": float(cert.get("eta", np.nan)),
         f"{prefix}_regret1": float(cert.get("regret1", np.nan)),
         f"{prefix}_regret2": float(cert.get("regret2", np.nan)),
         f"{prefix}_residual_norm": (float(result.residual_norm) if result is not None else np.nan),
         f"{prefix}_objective": (float(result.objective) if result is not None else np.nan),
-        f"{prefix}_iterations": result.iterations if result is not None else None,
+        f"{prefix}_iterations": total_iterations if stage_runs else result.iterations,
         f"{prefix}_has_profile": result is not None and result.x is not None and result.y is not None,
-        f"{prefix}_history_len": len(result.history) if result is not None else 0,
+        f"{prefix}_history_len": total_history_len if stage_runs else len(result.history),
         f"{prefix}_best_residual_norm": float(best_iterate.get("residual_norm", np.nan)),
         f"{prefix}_best_objective": float(best_iterate.get("objective", np.nan)),
         f"{prefix}_best_certificate_eta": float(best_certificate.get("eta", np.nan)),
-        f"{prefix}_best_certificate_iteration": best_certificate.get("iteration"),
+        f"{prefix}_best_certificate_iteration": certificate_iteration,
+        f"{prefix}_selected_stage": selected_stage,
+        f"{prefix}_selected_kappa": selected_kappa,
+        f"{prefix}_selected_tau": selected_tau,
+        f"{prefix}_stages_completed": len(stage_runs) if stage_runs else 1,
         f"{prefix}_theta1": float(theta[0]),
         f"{prefix}_theta2": float(theta[1]),
         f"{prefix}_error": method_error,
@@ -136,8 +242,9 @@ def _history_rows(
     n: int,
     seed: int,
     method: str,
-    result,
+    stage_run: dict[str, Any],
 ) -> Iterator[dict[str, Any]]:
+    result = stage_run["result"]
     if result is None:
         return
     for checkpoint in result.history:
@@ -149,17 +256,20 @@ def _history_rows(
             "seed": seed,
             "gamma": args.gamma,
             "alpha": args.alpha if risk == "cvar" else np.nan,
-            "entropy_kappa": args.entropy_kappa,
-            "smoothing_tau": args.smoothing_tau,
+            "entropy_kappa": stage_run["kappa"],
+            "smoothing_tau": stage_run["tau"],
             "step_size": args.step_size,
             "step_decay": args.step_decay,
-            "max_iter": args.max_iter,
+            "max_iter": stage_run["max_iter"],
             "minibatch_size": stochastic_minibatch_size(args, K),
             "regret_tolerance": args.regret_tolerance,
             "record_every": args.record_every,
             "certify_every": args.certify_every,
             "method": method,
-            "iteration": checkpoint["iteration"],
+            "continuation_stage": stage_run["stage"],
+            "stage_iteration": checkpoint["iteration"],
+            "iteration": stage_run["iteration_offset"] + checkpoint["iteration"],
+            "selected_stage": bool(stage_run.get("selected", False)),
             "residual_norm": checkpoint["residual_norm"],
             "objective": checkpoint["objective"],
             "eta": checkpoint.get("eta", np.nan),
@@ -180,6 +290,7 @@ def run_instance(
 ) -> dict[str, Any]:
     if risk not in RISKS:
         raise ValueError(f"risk must be one of {RISKS}; got {risk!r}.")
+    stages = _continuation_stages(args)
     A, B, p = simulate_random_payoffs(K=K, n=n, seed=seed, low=args.low, high=args.high)
     row: dict[str, Any] = {
         "risk": risk,
@@ -188,26 +299,33 @@ def run_instance(
         "seed": seed,
         "gamma": args.gamma,
         "alpha": args.alpha if risk == "cvar" else np.nan,
-        "entropy_kappa": args.entropy_kappa,
-        "smoothing_tau": args.smoothing_tau,
-        "max_iter": args.max_iter,
+        "entropy_kappa": stages[0][0],
+        "smoothing_tau": stages[0][1],
+        "max_iter": stages[0][2],
         "minibatch_size": stochastic_minibatch_size(args, K),
         "step_size": args.step_size,
         "step_decay": args.step_decay,
         "regret_tolerance": args.regret_tolerance,
         "record_every": args.record_every,
         "certify_every": args.certify_every,
+        "continuation": getattr(args, "continuation_kappa", None) is not None,
+        "continuation_stages": len(stages),
+        "continuation_kappa": ",".join(f"{kappa:g}" for kappa, _, _ in stages),
+        "continuation_tau": ",".join(f"{tau:g}" for _, tau, _ in stages),
+        "continuation_max_iter": ",".join(str(max_iter) for _, _, max_iter in stages),
+        "continuation_total_max_iter": sum(max_iter for _, _, max_iter in stages),
         "methods": ",".join(args.methods),
     }
 
     results = {}
     for method in args.methods:
-        result, elapsed, error = _run_method(risk, method, A, B, p, args.gamma, args.alpha, args, seed)
+        result, elapsed, error, stage_runs = _run_method(risk, method, A, B, p, args.gamma, args.alpha, args, seed)
         results[method] = result
-        row.update(_method_metrics(method, result, elapsed, error))
+        row.update(_method_metrics(method, result, elapsed, error, stage_runs))
         if history_callback is not None:
-            for history_row in _history_rows(args, risk, K, n, seed, method, result):
-                history_callback(history_row)
+            for stage_run in stage_runs:
+                for history_row in _history_rows(args, risk, K, n, seed, method, stage_run):
+                    history_callback(history_row)
     _pairwise_metrics(row, results)
     return row
 
@@ -255,6 +373,14 @@ def print_summary(rows: list[dict[str, Any]], risks: list[str], methods: list[st
 
 
 def iter_tuning_configs(args: argparse.Namespace) -> Iterator[argparse.Namespace]:
+    _continuation_stages(args)
+    if getattr(args, "continuation_kappa", None) is not None:
+        step_sizes = args.step_size_grid or [args.step_size]
+        for step_size in step_sizes:
+            config_args = argparse.Namespace(**vars(args))
+            config_args.step_size = step_size
+            yield config_args
+        return
     kappas = args.entropy_kappa_grid or [args.entropy_kappa]
     taus = args.smoothing_tau_grid or [args.smoothing_tau]
     step_sizes = args.step_size_grid or [args.step_size]
@@ -279,6 +405,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--entropy-kappa-grid", type=float, nargs="+", default=None)
     parser.add_argument("--smoothing-tau", type=float, default=0.05)
     parser.add_argument("--smoothing-tau-grid", type=float, nargs="+", default=None)
+    parser.add_argument("--continuation-kappa", type=float, nargs="+", default=None)
+    parser.add_argument("--continuation-tau", type=float, nargs="+", default=None)
+    parser.add_argument("--continuation-max-iter", type=int, nargs="+", default=None)
     parser.add_argument("--max-iter", type=int, default=1000)
     parser.add_argument("--batch-size", type=int, default=None)
     parser.add_argument("--step-size", type=float, default=0.2)
@@ -303,6 +432,10 @@ def parse_args() -> argparse.Namespace:
     args = parser.parse_args()
     if args.history_csv is not None and args.record_every <= 0:
         parser.error("--history-csv requires a positive --record-every")
+    try:
+        _continuation_stages(args)
+    except ValueError as exc:
+        parser.error(str(exc))
     return args
 
 
@@ -334,6 +467,15 @@ def main() -> None:
                             if result_writer is not None:
                                 result_writer.write_row(row)
                             if not args.quiet:
+                                if row["continuation"]:
+                                    setting_text = (
+                                        f"continuation_kappa={row['continuation_kappa']} "
+                                        f"continuation_tau={row['continuation_tau']} "
+                                    )
+                                else:
+                                    setting_text = (
+                                        f"kappa={config_args.entropy_kappa:g} tau={config_args.smoothing_tau:g} "
+                                    )
                                 method_parts = [
                                     f"{risk}, {method}: "
                                     f"success={row[f'{method}_success']} "
@@ -342,9 +484,7 @@ def main() -> None:
                                     for method in args.methods
                                 ]
                                 print(
-                                    f"kappa={config_args.entropy_kappa:g} "
-                                    f"tau={config_args.smoothing_tau:g} "
-                                    f"step={config_args.step_size:g} "
+                                    setting_text + f"step={config_args.step_size:g} "
                                     f"K={K:>3} n={n:>3} rep={rep:>2} " + " | ".join(method_parts)
                                 )
 
