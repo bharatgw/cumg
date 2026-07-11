@@ -7,7 +7,7 @@ This directory preserves the research workflows and committed outputs used while
 - `mcpSolvers.ipynb`: main notebook for MCP formulations, small-support experiments, and plots.
 - `mcpAlgoAnalysis.ipynb`: analysis and plotting notebook for scalability outputs.
 - `compare_small_support_msd.py`: script comparing MSD small-support search backends.
-- `compare_stochastic_fo_msd.py`: script comparing full-batch and mini-batch MSD stochastic first-order runs.
+- `compare_stochastic_fo.py`: script comparing full-batch and mini-batch MSD or CVaR stochastic first-order runs.
 - `legacy/`: original standalone scripts kept as provenance for the packaged implementation.
 - `results/`: committed CSV outputs from experiments.
 
@@ -39,7 +39,8 @@ These CSV files are intentionally tracked in git for reproducibility, but they a
 Run a small fixed-seed grid before launching the full scalability experiment:
 
 ```bash
-python experiments/compare_stochastic_fo_msd.py \
+python experiments/compare_stochastic_fo.py \
+  --risk msd cvar \
   --K 30 100 \
   --n 20 \
   --reps 1 \
@@ -55,10 +56,11 @@ python experiments/compare_stochastic_fo_msd.py \
   --quiet
 ```
 
-The summary CSV records every stochastic hyperparameter and the iteration of
-the best exact-regret certificate. The history CSV records residual norm,
-objective, exact eta, and player regrets at each shared record/certification
-checkpoint. Grid values form a Cartesian product and all configurations reuse
-the same game seeds.
+The summary CSV records the risk model, every stochastic hyperparameter, and
+the iteration of the best exact-regret certificate. The history CSV records
+the risk model, residual norm, objective, exact eta, player regrets, and CVaR
+thresholds at each shared record/certification checkpoint. Grid values form a
+Cartesian product and all configurations reuse the same game seeds within each
+risk model.
 
 Large third-party solver distributions, PDFs, and archives were removed from the publishable tree. Local copies, if present, live under `.local/removed_artifacts/` and are ignored by git.

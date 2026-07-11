@@ -481,7 +481,7 @@ def _run_stochastic_fo(
     best_certificate = None
     completed_iterations = 0
     checkpoint = None
-    
+
     if config.certify_every is not None:
         checkpoint = _certify_checkpoint(
             certifier, 0, params, residual_norm, objective, jax, include_theta
