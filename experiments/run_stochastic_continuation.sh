@@ -1,7 +1,11 @@
-WORKERS=6
+#!/usr/bin/env bash
+set -euo pipefail
+
+WORKERS=8
 PYTHON_BIN="$(PYENV_VERSION=.venv pyenv which python)"
 
-RESULT_DIR="experiments/results/stochastic/continuation_shards"
+VERSION="v2"
+RESULT_DIR="experiments/results/stochastic/continuation_shards/$VERSION"
 LOG_DIR="$RESULT_DIR/logs"
 mkdir -p "$RESULT_DIR" "$LOG_DIR"
 
@@ -14,8 +18,8 @@ export VECLIB_MAXIMUM_THREADS=1
 export XLA_FLAGS="--xla_cpu_multi_thread_eigen=false intra_op_parallelism_threads=1"
 
 for risk in msd cvar; do
-  for K in 30 100 250; do
-    for step in 2 4 10; do
+  for K in 250; do
+    for step in 5 10 15; do
       for rep in 0 1 2; do
         printf "%s %s %s %s\n" "$risk" "$K" "$step" "$rep"
       done
@@ -50,9 +54,9 @@ done | xargs -n 4 -P "$WORKERS" bash -c '
     --n 20 \
     --reps 1 \
     --seed-base "$seed_base" \
-    --continuation-kappa 0.1 0.03 0.01 0.003 \
-    --continuation-tau 0.02 0.01 0.005 0.002 \
-    --continuation-max-iter 2000 2000 2000 2000 \
+    --continuation-kappa 0.1 0.03 0.01 0.003 0.001 0.0003 0.0001 \
+    --continuation-tau 0.02 0.01 0.005 0.002 0.001 0.0005 0.0002 \
+    --continuation-max-iter 2000 2000 2000 2000 2000 2000 2000 \
     --step-size "$step" \
     --step-decay 0.5 \
     --record-every 100 \
