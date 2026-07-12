@@ -36,7 +36,7 @@ done | xargs -n 4 -P "$WORKERS" bash -c '
   case "$step" in
     15) continuation_steps=(15 12 9 6 4 2.5 1.5 1 1) ;;
     20) continuation_steps=(20 19 18 17 16 15 14 13 12) ;;
-    25) continuation_steps=(25 20 15 10 5 4 2 1 0.5) ;;
+    25) continuation_steps=(25 20 15 10 5 4 2) ;;
     *) echo "Unsupported initial step: $step" >&2; exit 2 ;;
   esac
 
