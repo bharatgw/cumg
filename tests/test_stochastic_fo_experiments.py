@@ -150,9 +150,12 @@ def test_stochastic_fo_continuation_warm_starts_and_keeps_best_stage(monkeypatch
         entropy_kappa_grid=None,
         smoothing_tau=0.02,
         smoothing_tau_grid=None,
-        continuation_kappa=[0.1, 0.03],
-        continuation_tau=[0.02, 0.01],
-        continuation_max_iter=[10, 20],
+        continuation_kappa=[0.1, 0.03, 0.01],
+        continuation_tau=[0.02, 0.01, 0.005],
+        continuation_max_iter=[10, 20, 30],
+        continuation_step_size=[2.0, 1.0, 0.5],
+        continuation_stage_rtol=None,
+        continuation_stage_atol=0.001,
         max_iter=100,
         batch_size=1,
         step_size=2.0,
@@ -168,8 +171,12 @@ def test_stochastic_fo_continuation_warm_starts_and_keeps_best_stage(monkeypatch
         high=1.0,
     )
     configs = []
-    profiles = [np.array([0.75, 0.25]), np.array([0.6, 0.4])]
-    etas = [0.2, 0.1]
+    profiles = [
+        np.array([0.75, 0.25]),
+        np.array([0.6, 0.4]),
+        np.array([0.55, 0.45]),
+    ]
+    etas = [0.2, 0.1, 0.0995]
 
     def fake_solver(A, B, p, gamma, config):
         del A, B, p, gamma
@@ -202,6 +209,7 @@ def test_stochastic_fo_continuation_warm_starts_and_keeps_best_stage(monkeypatch
             objective=0.125,
             iterations=config.max_iter,
             solve_time_s=1.0,
+            termination_reason="max_iter",
             best_iterate={"residual_norm": 0.5, "objective": 0.125},
             best_certificate={"eta": eta, "iteration": config.max_iter},
             history=history,
@@ -219,25 +227,27 @@ def test_stochastic_fo_continuation_warm_starts_and_keeps_best_stage(monkeypatch
         history_callback=history_rows.append,
     )
 
-    assert len(configs) == 2
+    assert len(configs) == 3
     assert configs[0].kappa == 0.1
     assert configs[1].kappa == 0.03
     assert configs[1].tau == 0.01
     assert configs[1].max_iter == 20
+    assert configs[1].step_size == 1.0
     np.testing.assert_allclose(configs[1].x0, profiles[0])
     np.testing.assert_allclose(configs[1].y0, profiles[0][::-1])
     assert row["continuation"]
-    assert row["continuation_total_max_iter"] == 30
-    assert row["full_batch_eta"] == 0.1
-    assert row["full_batch_iterations"] == 30
-    assert row["full_batch_selected_stage"] == 1
-    assert row["full_batch_selected_kappa"] == 0.03
-    assert row["full_batch_selected_tau"] == 0.01
-    assert row["full_batch_stages_completed"] == 2
-    assert row["full_batch_best_certificate_iteration"] == 30
-    assert [history["iteration"] for history in history_rows] == [0, 10, 10, 30]
-    assert [history["continuation_stage"] for history in history_rows] == [0, 0, 1, 1]
-    assert [history["selected_stage"] for history in history_rows] == [False, False, True, True]
+    assert row["continuation_total_max_iter"] == 60
+    assert row["full_batch_eta"] == 0.0995
+    assert row["full_batch_iterations"] == 60
+    assert row["full_batch_selected_stage"] == 2
+    assert row["full_batch_selected_kappa"] == 0.01
+    assert row["full_batch_selected_tau"] == 0.005
+    assert row["full_batch_stages_completed"] == 3
+    assert row["full_batch_best_certificate_iteration"] == 60
+    assert row["full_batch_continuation_stop_reason"] == "stage_stagnation"
+    assert [history["iteration"] for history in history_rows] == [0, 10, 10, 30, 30, 60]
+    assert [history["continuation_stage"] for history in history_rows] == [0, 0, 1, 1, 2, 2]
+    assert [history["selected_stage"] for history in history_rows] == [False, False, False, False, True, True]
 
 
 def test_stochastic_fo_continuation_rejects_mismatched_schedules():
@@ -250,6 +260,9 @@ def test_stochastic_fo_continuation_rejects_mismatched_schedules():
         continuation_kappa=[0.1, 0.03],
         continuation_tau=[0.02],
         continuation_max_iter=None,
+        continuation_step_size=None,
+        continuation_stage_rtol=None,
+        continuation_stage_atol=None,
     )
 
     with pytest.raises(ValueError, match="same length"):

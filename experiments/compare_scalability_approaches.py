@@ -95,6 +95,11 @@ def stochastic_minibatch_size(args: argparse.Namespace, K: int) -> int:
     return max(1, min(K, int(np.ceil(np.sqrt(K)))))
 
 
+def stochastic_regret_tolerance(args: argparse.Namespace) -> float:
+    tolerance = getattr(args, "stochastic_regret_tolerance", None)
+    return args.epsilon if tolerance is None else tolerance
+
+
 def _solver_options(args: argparse.Namespace) -> dict[str, dict[str, Any]]:
     path_options = getattr(args, "path_options", DEFAULT_PATH_OPTIONS)
     if args.solver != "pathampl" or path_options is None:
@@ -146,7 +151,7 @@ def _stochastic_config(
         gradient_clip_norm=optional_positive_float(args.gradient_clip_norm),
         record_every=optional_positive_int(args.record_every),
         certify_every=optional_positive_int(args.certify_every),
-        regret_tolerance=args.epsilon,
+        regret_tolerance=stochastic_regret_tolerance(args),
     )
 
 
@@ -535,6 +540,7 @@ def run_instance(
         "stochastic_gradient_clip_norm": args.gradient_clip_norm,
         "stochastic_record_every": args.record_every,
         "stochastic_certify_every": args.certify_every,
+        "stochastic_regret_tolerance": stochastic_regret_tolerance(args),
         "methods": ",".join(args.methods),
     }
     results: dict[str, Any] = {}
@@ -663,6 +669,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--gamma", type=float, default=0.5)
     parser.add_argument("--alpha", type=float, default=0.5)
     parser.add_argument("--epsilon", type=float, default=1e-3)
+    parser.add_argument(
+        "--stochastic-regret-tolerance",
+        "--stochastic-epsilon",
+        dest="stochastic_regret_tolerance",
+        type=float,
+        default=None,
+        help="Stochastic-method regret tolerance; defaults to --epsilon.",
+    )
     parser.add_argument("--epsilon-scr", type=float, default=None)
     parser.add_argument("--max-candidates", type=int, default=100)
     parser.add_argument("--n-screen-starts", type=int, default=1)
@@ -690,6 +704,11 @@ def parse_args() -> argparse.Namespace:
     if args.fallback_solver is not None and args.fallback_solver.lower() == "none":
         args.fallback_solver = None
     args.path_options = DEFAULT_PATH_OPTIONS.copy()
+    if args.stochastic_regret_tolerance is not None and (
+        not np.isfinite(args.stochastic_regret_tolerance)
+        or args.stochastic_regret_tolerance < 0
+    ):
+        parser.error("stochastic regret tolerance must be finite and nonnegative")
     try:
         rep_indices(args)
     except ValueError as exc:

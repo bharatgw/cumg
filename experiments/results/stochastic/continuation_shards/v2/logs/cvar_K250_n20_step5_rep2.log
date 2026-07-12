@@ -1,27 +1,29 @@
-START 2026-07-12T10:10:27+0800 cvar_K250_n20_step5_rep2
-usage: compare_stochastic_fo.py [-h] [--risk {msd,cvar} [{msd,cvar} ...]]
-                                [--K K [K ...]] [--n N [N ...]] [--reps REPS]
-                                [--seed-base SEED_BASE] [--gamma GAMMA]
-                                [--alpha ALPHA]
-                                [--entropy-kappa ENTROPY_KAPPA]
-                                [--entropy-kappa-grid ENTROPY_KAPPA_GRID [ENTROPY_KAPPA_GRID ...]]
-                                [--smoothing-tau SMOOTHING_TAU]
-                                [--smoothing-tau-grid SMOOTHING_TAU_GRID [SMOOTHING_TAU_GRID ...]]
-                                [--continuation-kappa CONTINUATION_KAPPA [CONTINUATION_KAPPA ...]]
-                                [--continuation-tau CONTINUATION_TAU [CONTINUATION_TAU ...]]
-                                [--continuation-max-iter CONTINUATION_MAX_ITER [CONTINUATION_MAX_ITER ...]]
-                                [--max-iter MAX_ITER]
-                                [--batch-size BATCH_SIZE]
-                                [--step-size STEP_SIZE]
-                                [--step-size-grid STEP_SIZE_GRID [STEP_SIZE_GRID ...]]
-                                [--step-decay STEP_DECAY]
-                                [--logit-bound LOGIT_BOUND]
-                                [--gradient-clip-norm GRADIENT_CLIP_NORM]
-                                [--record-every RECORD_EVERY]
-                                [--certify-every CERTIFY_EVERY]
-                                [--regret-tolerance REGRET_TOLERANCE]
-                                [--methods {full_batch,minibatch} [{full_batch,minibatch} ...]]
-                                [--low LOW] [--high HIGH] [--csv CSV]
-                                [--history-csv HISTORY_CSV] [--quiet]
-compare_stochastic_fo.py: error: continuation kappa and tau schedules must have the same length
-END 2026-07-12T10:10:27+0800 status=2 cvar_K250_n20_step5_rep2
+START 2026-07-12T10:59:59+0800 cvar_K250_n20_step5_rep2
+/Users/gangwb/Work/Job_stuff/GameTheory/lcpSolver/src/cumg/small_support.py:202: RuntimeWarning: divide by zero encountered in matmul
+  expected_payoff_by_action = p @ payoff_by_action
+/Users/gangwb/Work/Job_stuff/GameTheory/lcpSolver/src/cumg/small_support.py:202: RuntimeWarning: overflow encountered in matmul
+  expected_payoff_by_action = p @ payoff_by_action
+/Users/gangwb/Work/Job_stuff/GameTheory/lcpSolver/src/cumg/small_support.py:202: RuntimeWarning: invalid value encountered in matmul
+  expected_payoff_by_action = p @ payoff_by_action
+/Users/gangwb/Work/Job_stuff/GameTheory/lcpSolver/src/cumg/small_support.py:232: RuntimeWarning: divide by zero encountered in matmul
+  lambda q: cvar_value_from_state_payoffs(payoff_by_action @ q, p, gamma, alpha),
+/Users/gangwb/Work/Job_stuff/GameTheory/lcpSolver/src/cumg/small_support.py:232: RuntimeWarning: overflow encountered in matmul
+  lambda q: cvar_value_from_state_payoffs(payoff_by_action @ q, p, gamma, alpha),
+/Users/gangwb/Work/Job_stuff/GameTheory/lcpSolver/src/cumg/small_support.py:232: RuntimeWarning: invalid value encountered in matmul
+  lambda q: cvar_value_from_state_payoffs(payoff_by_action @ q, p, gamma, alpha),
+continuation_kappa=0.1,0.03,0.01,0.003,0.001,0.0003,0.0001 continuation_tau=0.02,0.01,0.005,0.002,0.001,0.0005,0.0002 step=5 K=250 n= 20 rep= 0 cvar, full_batch: success=False eta=0.001838 resid=0.7075 time=2887.108s | cvar, minibatch: success=False eta=0.002017 resid=0.7072 time=3428.345s
+
+Summary
+-------
+
+cvar
+-------
+full_batch: success_rate=0.000, median_time=2887s, median_eta=0.001838, median_residual=0.7075
+ minibatch: success_rate=0.000, median_time=3428s, median_eta=0.002017, median_residual=0.7072
+minibatch/full_batch median time ratio: 1.187
+median eta difference, minibatch - full_batch: 0.0001782
+median strategy L1 difference: x=0.06458, y=0.04803
+
+wrote experiments/results/stochastic/continuation_shards/v2/cvar_K250_n20_step5_rep2_summary.csv
+wrote experiments/results/stochastic/continuation_shards/v2/cvar_K250_n20_step5_rep2_history.csv
+END 2026-07-12T12:45:17+0800 status=0 cvar_K250_n20_step5_rep2

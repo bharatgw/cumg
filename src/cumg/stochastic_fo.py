@@ -41,6 +41,9 @@ class StochasticFOConfig:
     record_every: int | None = None
     certify_every: int | None = None
     regret_tolerance: float = 1e-3
+    stagnation_window: int | None = None
+    stagnation_rtol: float = 0.0
+    stagnation_atol: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -61,6 +64,7 @@ class StochasticFOResult:
     best_certificate: dict[str, Any] | None = None
     history: list[dict[str, Any]] = field(default_factory=list)
     config: StochasticFOConfig | None = None
+    termination_reason: str = "max_iter"
 
     def as_dict(self) -> dict[str, Any]:
         """Return a notebook-friendly dictionary representation."""
@@ -76,6 +80,7 @@ class StochasticFOResult:
             "objective": self.objective,
             "iterations": self.iterations,
             "time": self.solve_time_s,
+            "termination_reason": self.termination_reason,
             "best_iterate": self.best_iterate,
             "best_certificate": self.best_certificate,
             "history": self.history,
@@ -112,39 +117,41 @@ def _validate_config(config: StochasticFOConfig, K: int) -> int:
         raise ValueError("batch_size must be a positive integer or None.")
     else:
         batch_size = config.batch_size
-    if config.logit_bound is not None and (
-        not np.isfinite(config.logit_bound) or config.logit_bound <= 0
-    ):
+    if config.logit_bound is not None and (not np.isfinite(config.logit_bound) or config.logit_bound <= 0):
         raise ValueError("logit_bound must be finite and positive when provided.")
     if config.gradient_clip_norm is not None and (
         not np.isfinite(config.gradient_clip_norm) or config.gradient_clip_norm <= 0
     ):
-        raise ValueError(
-            "gradient_clip_norm must be finite and positive when provided."
-        )
+        raise ValueError("gradient_clip_norm must be finite and positive when provided.")
     if config.theta_bounds is not None:
         try:
             lo, hi = config.theta_bounds
         except (TypeError, ValueError) as exc:
-            raise ValueError(
-                "theta_bounds must be a pair of lower and upper bounds or None."
-            ) from exc
+            raise ValueError("theta_bounds must be a pair of lower and upper bounds or None.") from exc
         if lo is not None and not np.isfinite(lo):
             raise ValueError("theta_bounds lower bound must be finite or None.")
         if hi is not None and not np.isfinite(hi):
             raise ValueError("theta_bounds upper bound must be finite or None.")
         if lo is not None and hi is not None and lo > hi:
             raise ValueError("theta_bounds lower bound cannot exceed upper bound.")
-    if config.record_every is not None and (
-        not isinstance(config.record_every, int) or config.record_every <= 0
-    ):
+    if config.record_every is not None and (not isinstance(config.record_every, int) or config.record_every <= 0):
         raise ValueError("record_every must be a positive integer or None.")
-    if config.certify_every is not None and (
-        not isinstance(config.certify_every, int) or config.certify_every <= 0
-    ):
+    if config.certify_every is not None and (not isinstance(config.certify_every, int) or config.certify_every <= 0):
         raise ValueError("certify_every must be a positive integer or None.")
     if not np.isfinite(config.regret_tolerance) or config.regret_tolerance < 0:
         raise ValueError("regret_tolerance must be finite and nonnegative.")
+    if config.stagnation_window is not None and (
+        not isinstance(config.stagnation_window, int) or config.stagnation_window <= 0
+    ):
+        raise ValueError("stagnation_window must be a positive integer or None.")
+    if config.stagnation_window is not None and config.certify_every is None:
+        raise ValueError("stagnation_window requires certify_every.")
+    if not np.isfinite(config.stagnation_rtol) or config.stagnation_rtol < 0:
+        raise ValueError("stagnation_rtol must be finite and nonnegative.")
+    if not np.isfinite(config.stagnation_atol) or config.stagnation_atol < 0:
+        raise ValueError("stagnation_atol must be finite and nonnegative.")
+    if config.stagnation_window is not None and config.stagnation_rtol == 0 and config.stagnation_atol == 0:
+        raise ValueError("stagnation_window requires a positive stagnation_rtol or stagnation_atol.")
     return batch_size
 
 
@@ -268,19 +275,13 @@ def _cvar_state_payoffs(jnp, A, B, x, y):
 
 def _msd_rho_batch(jnp, state_payoffs, p, batch, gamma: float, tau: float):
     mean = jnp.sum(p * state_payoffs)
-    sampled_smooth_downside = _batch_weighted_sum(
-        jnp, _jax_varphi(jnp, mean - state_payoffs, tau), p, batch
-    )
+    sampled_smooth_downside = _batch_weighted_sum(jnp, _jax_varphi(jnp, mean - state_payoffs, tau), p, batch)
     return mean - gamma * sampled_smooth_downside
 
 
-def _cvar_rho_batch(
-    jnp, state_payoffs, p, batch, gamma: float, alpha: float, tau: float, theta
-):
+def _cvar_rho_batch(jnp, state_payoffs, p, batch, gamma: float, alpha: float, tau: float, theta):
     mean = jnp.sum(p * state_payoffs)
-    sampled_tail = _batch_weighted_sum(
-        jnp, _jax_varphi(jnp, theta - state_payoffs, tau), p, batch
-    )
+    sampled_tail = _batch_weighted_sum(jnp, _jax_varphi(jnp, theta - state_payoffs, tau), p, batch)
     return (1.0 - gamma) * mean + gamma * theta - (gamma / alpha) * sampled_tail
 
 
@@ -312,9 +313,7 @@ def _make_msd_residual_fn(jax, jnp, A, B, p, gamma: float, config: StochasticFOC
     return residual
 
 
-def _make_cvar_residual_fn(
-    jax, jnp, A, B, p, gamma: float, alpha: float, config: StochasticFOConfig
-):
+def _make_cvar_residual_fn(jax, jnp, A, B, p, gamma: float, alpha: float, config: StochasticFOConfig):
     def residual(params, batch):
         w1, w2, theta1, theta2 = params
         x = jax.nn.softmax(w1)
@@ -330,15 +329,11 @@ def _make_cvar_residual_fn(
 
         def rho1_from_theta(theta_var):
             u1, _ = _cvar_state_payoffs(jnp, A, B, x, y)
-            return _cvar_rho_batch(
-                jnp, u1, p, batch, gamma, alpha, config.tau, theta_var
-            )
+            return _cvar_rho_batch(jnp, u1, p, batch, gamma, alpha, config.tau, theta_var)
 
         def rho2_from_theta(theta_var):
             _, u2 = _cvar_state_payoffs(jnp, A, B, x, y)
-            return _cvar_rho_batch(
-                jnp, u2, p, batch, gamma, alpha, config.tau, theta_var
-            )
+            return _cvar_rho_batch(jnp, u2, p, batch, gamma, alpha, config.tau, theta_var)
 
         g1 = jax.grad(rho1_from_x)(x)
         g2 = jax.grad(rho2_from_y)(y)
@@ -459,6 +454,26 @@ def _maybe_update_best_certificate(best, checkpoint: dict[str, Any] | None):
     return best
 
 
+def _certificate_stagnated(trace: list[tuple[int, float]], config: StochasticFOConfig) -> bool:
+    if config.stagnation_window is None or len(trace) < 2:
+        return False
+    current_iteration, current_eta = trace[-1]
+    cutoff = current_iteration - config.stagnation_window
+    reference = next(
+        ((iteration, eta) for iteration, eta in reversed(trace[:-1]) if iteration <= cutoff),
+        None,
+    )
+    if reference is None:
+        return False
+    _, reference_eta = reference
+    improvement = reference_eta - current_eta
+    required = max(
+        config.stagnation_atol,
+        config.stagnation_rtol * abs(reference_eta),
+    )
+    return improvement < required
+
+
 def _run_stochastic_fo(
     jax,
     jnp,
@@ -475,18 +490,18 @@ def _run_stochastic_fo(
     history: list[dict[str, Any]] = []
     residual_norm, objective = _full_residual_stats(residual_fn, params, full_batch)
     include_theta = len(params) == 4
-    best = _maybe_update_best(
-        None, 0, params, residual_norm, objective, jax, include_theta
-    )
+    best = _maybe_update_best(None, 0, params, residual_norm, objective, jax, include_theta)
     best_certificate = None
+    certificate_trace: list[tuple[int, float]] = []
     completed_iterations = 0
+    termination_reason = "max_iter"
     checkpoint = None
 
     if config.certify_every is not None:
-        checkpoint = _certify_checkpoint(
-            certifier, 0, params, residual_norm, objective, jax, include_theta
-        )
+        checkpoint = _certify_checkpoint(certifier, 0, params, residual_norm, objective, jax, include_theta)
         best_certificate = _maybe_update_best_certificate(best_certificate, checkpoint)
+        if best_certificate is not None:
+            certificate_trace.append((0, float(best_certificate["eta"])))
         if config.record_every is not None:
             _record_history(
                 history,
@@ -499,7 +514,14 @@ def _run_stochastic_fo(
                 checkpoint,
             )
         if checkpoint is not None and checkpoint["eta"] <= config.regret_tolerance:
-            return params, best, best_certificate, history, completed_iterations
+            return (
+                params,
+                best,
+                best_certificate,
+                history,
+                completed_iterations,
+                "regret_tolerance",
+            )
 
     for iteration in range(config.max_iter):
         batch1 = jnp.asarray(_draw_batch(rng, K, batch_size))
@@ -509,26 +531,16 @@ def _run_stochastic_fo(
         grad = pullback(residual2)[0]
         grad = _clip_gradient(jnp, grad, config.gradient_clip_norm)
         step = config.step_size / ((iteration + 1) ** config.step_decay)
-        params = tuple(
-            param - step * update for param, update in zip(params, grad, strict=True)
-        )
+        params = tuple(param - step * update for param, update in zip(params, grad, strict=True))
         params = project_fn(jnp, params, config)
 
         should_check = (
             iteration + 1 == config.max_iter
-            or (
-                config.record_every is not None
-                and (iteration + 1) % config.record_every == 0
-            )
-            or (
-                config.certify_every is not None
-                and (iteration + 1) % config.certify_every == 0
-            )
+            or (config.record_every is not None and (iteration + 1) % config.record_every == 0)
+            or (config.certify_every is not None and (iteration + 1) % config.certify_every == 0)
         )
         if should_check:
-            residual_norm, objective = _full_residual_stats(
-                residual_fn, params, full_batch
-            )
+            residual_norm, objective = _full_residual_stats(residual_fn, params, full_batch)
             completed_iterations = iteration + 1
             best = _maybe_update_best(
                 best,
@@ -540,8 +552,7 @@ def _run_stochastic_fo(
                 include_theta,
             )
             should_certify = config.certify_every is not None and (
-                completed_iterations % config.certify_every == 0
-                or completed_iterations == config.max_iter
+                completed_iterations % config.certify_every == 0 or completed_iterations == config.max_iter
             )
             checkpoint = None
             if should_certify:
@@ -554,13 +565,10 @@ def _run_stochastic_fo(
                     jax,
                     include_theta,
                 )
-                best_certificate = _maybe_update_best_certificate(
-                    best_certificate, checkpoint
-                )
-            if (
-                config.record_every is not None
-                and (iteration + 1) % config.record_every == 0
-            ):
+                best_certificate = _maybe_update_best_certificate(best_certificate, checkpoint)
+                if best_certificate is not None:
+                    certificate_trace.append((completed_iterations, float(best_certificate["eta"])))
+            if config.record_every is not None and (iteration + 1) % config.record_every == 0:
                 _record_history(
                     history,
                     completed_iterations,
@@ -572,14 +580,22 @@ def _run_stochastic_fo(
                     checkpoint,
                 )
             if should_certify:
-                if (
-                    checkpoint is not None
-                    and checkpoint["eta"] <= config.regret_tolerance
-                ):
+                if checkpoint is not None and checkpoint["eta"] <= config.regret_tolerance:
+                    termination_reason = "regret_tolerance"
+                    break
+                if _certificate_stagnated(certificate_trace, config):
+                    termination_reason = "stagnation"
                     break
 
     assert best is not None
-    return params, best, best_certificate, history, completed_iterations
+    return (
+        params,
+        best,
+        best_certificate,
+        history,
+        completed_iterations,
+        termination_reason,
+    )
 
 
 def solve_msd_stochastic_fo(
@@ -610,7 +626,14 @@ def solve_msd_stochastic_fo(
         return full_msd_regret(A, B, p, gamma, candidate_x, candidate_y)
 
     started = time.perf_counter()
-    params, best, best_certificate, history, completed_iterations = _run_stochastic_fo(
+    (
+        params,
+        best,
+        best_certificate,
+        history,
+        completed_iterations,
+        termination_reason,
+    ) = _run_stochastic_fo(
         jax,
         jnp,
         params,
@@ -622,9 +645,7 @@ def solve_msd_stochastic_fo(
     )
     elapsed = time.perf_counter() - started
     x, y = _params_to_profile(jax, params)
-    residual_norm, objective = _full_residual_stats(
-        residual_fn, params, jnp.arange(A.shape[0])
-    )
+    residual_norm, objective = _full_residual_stats(residual_fn, params, jnp.arange(A.shape[0]))
     cert = full_msd_regret(A, B, p, gamma, x, y)
 
     if best_certificate is not None:
@@ -635,9 +656,7 @@ def solve_msd_stochastic_fo(
         objective = best_certificate["objective"]
 
     return StochasticFOResult(
-        success=bool(
-            np.isfinite(cert["eta"]) and cert["eta"] <= config.regret_tolerance
-        ),
+        success=bool(np.isfinite(cert["eta"]) and cert["eta"] <= config.regret_tolerance),
         x=x,
         y=y,
         model="MSD stochastic FO",
@@ -646,6 +665,7 @@ def solve_msd_stochastic_fo(
         objective=objective,
         iterations=completed_iterations,
         solve_time_s=elapsed,
+        termination_reason=termination_reason,
         best_iterate=best,
         best_certificate=best_certificate,
         history=history,
@@ -696,7 +716,14 @@ def solve_cvar_stochastic_fo(
         return full_cvar_regret(A, B, p, gamma, alpha, candidate_x, candidate_y)
 
     started = time.perf_counter()
-    params, best, best_certificate, history, completed_iterations = _run_stochastic_fo(
+    (
+        params,
+        best,
+        best_certificate,
+        history,
+        completed_iterations,
+        termination_reason,
+    ) = _run_stochastic_fo(
         jax,
         jnp,
         params,
@@ -709,9 +736,7 @@ def solve_cvar_stochastic_fo(
     elapsed = time.perf_counter() - started
     x, y = _params_to_profile(jax, params)
     theta = _params_to_theta(params)
-    residual_norm, objective = _full_residual_stats(
-        residual_fn, params, jnp.arange(A.shape[0])
-    )
+    residual_norm, objective = _full_residual_stats(residual_fn, params, jnp.arange(A.shape[0]))
     cert = full_cvar_regret(A, B, p, gamma, alpha, x, y)
 
     if best_certificate is not None:
@@ -723,9 +748,7 @@ def solve_cvar_stochastic_fo(
         theta = best_certificate["theta"]
 
     return StochasticFOResult(
-        success=bool(
-            np.isfinite(cert["eta"]) and cert["eta"] <= config.regret_tolerance
-        ),
+        success=bool(np.isfinite(cert["eta"]) and cert["eta"] <= config.regret_tolerance),
         x=x,
         y=y,
         theta=theta,
@@ -735,6 +758,7 @@ def solve_cvar_stochastic_fo(
         objective=objective,
         iterations=completed_iterations,
         solve_time_s=elapsed,
+        termination_reason=termination_reason,
         best_iterate=best,
         best_certificate=best_certificate,
         history=history,

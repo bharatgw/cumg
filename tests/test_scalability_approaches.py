@@ -1,6 +1,7 @@
 import argparse
 import csv
 import importlib.util
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -28,6 +29,7 @@ def base_args(methods):
         gamma=0.0,
         alpha=1.0,
         epsilon=1e-2,
+        stochastic_regret_tolerance=None,
         epsilon_scr=None,
         max_candidates=1,
         n_screen_starts=1,
@@ -84,6 +86,34 @@ def test_scalability_driver_records_non_solver_methods(risk):
     assert row["stochastic_step_decay"] == args.step_decay
     assert row["stochastic_record_every"] == args.record_every
     assert row["stochastic_certify_every"] == args.certify_every
+    assert row["stochastic_regret_tolerance"] == args.epsilon
+
+
+def test_scalability_driver_accepts_stochastic_specific_regret_tolerance():
+    args = base_args(["stochastic_full_batch"])
+    args.stochastic_regret_tolerance = 1e-4
+
+    config = compare_scalability_approaches._stochastic_config(
+        args, K=2, seed=0, method="stochastic_full_batch"
+    )
+    row = compare_scalability_approaches.run_instance(
+        args, risk="msd", K=2, n=2, seed=0
+    )
+
+    assert config.regret_tolerance == 1e-4
+    assert row["epsilon"] == args.epsilon
+    assert row["stochastic_regret_tolerance"] == 1e-4
+
+
+@pytest.mark.parametrize(
+    "flag", ["--stochastic-regret-tolerance", "--stochastic-epsilon"]
+)
+def test_scalability_driver_parses_stochastic_tolerance_aliases(monkeypatch, flag):
+    monkeypatch.setattr(sys, "argv", [str(SCRIPT), flag, "0.0001"])
+
+    args = compare_scalability_approaches.parse_args()
+
+    assert args.stochastic_regret_tolerance == 1e-4
 
 
 def test_scalability_driver_records_best_certificate_iteration():

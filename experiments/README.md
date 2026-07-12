@@ -74,13 +74,18 @@ python experiments/compare_stochastic_fo.py \
   --K 30 100 250 \
   --n 20 \
   --reps 3 \
-  --continuation-kappa 0.1 0.03 0.01 0.003 \
-  --continuation-tau 0.02 0.01 0.005 0.002 \
-  --continuation-max-iter 2000 2000 2000 2000 \
-  --step-size-grid 2 3 4 \
+  --continuation-kappa 0.1 0.03 0.01 0.003 0.001 0.0003 0.0001 \
+  --continuation-tau 0.02 0.01 0.005 0.002 0.001 0.0005 0.0002 \
+  --continuation-max-iter 500 1500 1500 1000 1000 1000 1000 \
+  --continuation-step-size 10 8 6 4 3 2 1 \
   --step-decay 0.5 \
   --record-every 100 \
   --certify-every 100 \
+  --stagnation-window 500 \
+  --stagnation-rtol 0.005 \
+  --stagnation-atol 1e-5 \
+  --continuation-stage-rtol 0.005 \
+  --continuation-stage-atol 1e-5 \
   --regret-tolerance 0.001 \
   --csv experiments/results/stochastic/continuation_summary.csv \
   --history-csv experiments/results/stochastic/continuation_history.csv \
@@ -89,10 +94,12 @@ python experiments/compare_stochastic_fo.py \
 
 Each stage warm-starts from the preceding stage's best certified profile and
 restarts the step-size decay counter. CVaR also carries forward both threshold
-variables. The summary reports the lowest exact eta found across all stages;
-it also records that certificate's selected stage, kappa, and tau. History rows
-include local and cumulative iteration numbers plus the stage's kappa and tau.
-A method stops before later stages when it already meets the requested regret
-tolerance.
+variables. A stage stops when exact eta meets the target or fails to improve by
+the requested absolute or relative amount over the stagnation window.
+Continuation itself stops when a completed stage contributes less than the
+configured stage-level improvement. The summary reports the lowest exact eta
+found across all stages and its selected stage, kappa, tau, and step size.
+History rows include local and cumulative iterations plus stage settings and
+termination reasons.
 
 Large third-party solver distributions, PDFs, and archives were removed from the publishable tree. Local copies, if present, live under `.local/removed_artifacts/` and are ignored by git.

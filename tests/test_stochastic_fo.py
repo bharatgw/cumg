@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from sample_games import matching_pennies_game
+from sample_games import dominant_action_game, matching_pennies_game
 
 pytest.importorskip("jax")
 
@@ -32,14 +32,21 @@ def test_stochastic_fo_rejects_invalid_parameters():
     with pytest.raises(ValueError, match="alpha"):
         solve_cvar_stochastic_fo(A, B, p, gamma=0.0, alpha=0.0)
     with pytest.raises(ValueError, match="kappa"):
-        solve_msd_stochastic_fo(
-            A, B, p, gamma=0.0, config=StochasticFOConfig(kappa=0.0)
-        )
+        solve_msd_stochastic_fo(A, B, p, gamma=0.0, config=StochasticFOConfig(kappa=0.0))
     with pytest.raises(ValueError, match="tau"):
         solve_msd_stochastic_fo(A, B, p, gamma=0.0, config=StochasticFOConfig(tau=0.0))
     with pytest.raises(ValueError, match="batch_size"):
+        solve_msd_stochastic_fo(A, B, p, gamma=0.0, config=StochasticFOConfig(batch_size=0))
+    with pytest.raises(ValueError, match="requires certify_every"):
         solve_msd_stochastic_fo(
-            A, B, p, gamma=0.0, config=StochasticFOConfig(batch_size=0)
+            A,
+            B,
+            p,
+            gamma=0.0,
+            config=StochasticFOConfig(
+                stagnation_window=10,
+                stagnation_rtol=0.01,
+            ),
         )
 
 
@@ -138,6 +145,7 @@ def test_certify_every_records_best_certificate_and_stops_when_regret_is_small()
 
     assert result.success
     assert result.iterations == 0
+    assert result.termination_reason == "regret_tolerance"
     assert result.best_certificate is not None
     assert result.best_certificate["eta"] == pytest.approx(0.0, abs=1e-8)
     assert result.best_certificate["certificate"]["eta"] == pytest.approx(0.0, abs=1e-8)
@@ -146,3 +154,27 @@ def test_certify_every_records_best_certificate_and_stops_when_regret_is_small()
     assert result.history[0]["eta"] == pytest.approx(0.0, abs=1e-8)
     assert result.history[0]["regret1"] == pytest.approx(0.0, abs=1e-8)
     assert result.history[0]["regret2"] == pytest.approx(0.0, abs=1e-8)
+
+
+def test_stochastic_fo_stops_on_certificate_stagnation():
+    A, B, p = dominant_action_game()
+    config = StochasticFOConfig(
+        kappa=0.05,
+        tau=0.1,
+        max_iter=10,
+        batch_size=None,
+        step_size=0.01,
+        step_decay=0.0,
+        record_every=1,
+        certify_every=1,
+        regret_tolerance=0.0,
+        stagnation_window=1,
+        stagnation_rtol=1.0,
+    )
+
+    result = solve_msd_stochastic_fo(A, B, p, gamma=0.0, config=config)
+
+    assert not result.success
+    assert result.iterations == 1
+    assert result.termination_reason == "stagnation"
+    assert result.best_certificate is not None

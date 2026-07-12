@@ -37,12 +37,20 @@ from cumg import (  # noqa: E402
 )
 
 
-def _continuation_stages(args: argparse.Namespace) -> list[tuple[float, float, int]]:
+def _continuation_stages(
+    args: argparse.Namespace,
+) -> list[tuple[float, float, int, float]]:
     kappas = getattr(args, "continuation_kappa", None)
     taus = getattr(args, "continuation_tau", None)
     max_iters = getattr(args, "continuation_max_iter", None)
-    if kappas is None and taus is None and max_iters is None:
-        return [(args.entropy_kappa, args.smoothing_tau, args.max_iter)]
+    step_sizes = getattr(args, "continuation_step_size", None)
+    has_step_schedule = step_sizes is not None
+    stage_rtol = getattr(args, "continuation_stage_rtol", None)
+    stage_atol = getattr(args, "continuation_stage_atol", None)
+    if kappas is None and (stage_rtol is not None or stage_atol is not None):
+        raise ValueError("continuation stage stopping requires a continuation schedule")
+    if kappas is None and taus is None and max_iters is None and step_sizes is None:
+        return [(args.entropy_kappa, args.smoothing_tau, args.max_iter, args.step_size)]
     if kappas is None or taus is None:
         raise ValueError("continuation requires both --continuation-kappa and --continuation-tau")
     if args.entropy_kappa_grid is not None or args.smoothing_tau_grid is not None:
@@ -51,15 +59,31 @@ def _continuation_stages(args: argparse.Namespace) -> list[tuple[float, float, i
         raise ValueError("continuation kappa and tau schedules must have the same length")
     if max_iters is None:
         max_iters = [args.max_iter] * len(kappas)
+    if step_sizes is None:
+        step_sizes = [args.step_size] * len(kappas)
     if len(max_iters) != len(kappas):
         raise ValueError("continuation max-iter schedule must match the kappa and tau schedules")
+    if len(step_sizes) != len(kappas):
+        raise ValueError("continuation step-size schedule must match the kappa and tau schedules")
     if not kappas:
         raise ValueError("continuation schedules cannot be empty")
     if any(not np.isfinite(value) or value <= 0 for value in (*kappas, *taus)):
         raise ValueError("continuation kappa and tau values must be finite and positive")
     if any(value < 0 for value in max_iters):
         raise ValueError("continuation max-iter values must be nonnegative")
-    return list(zip(kappas, taus, max_iters, strict=True))
+    if any(not np.isfinite(value) or value <= 0 for value in step_sizes):
+        raise ValueError("continuation step-size values must be finite and positive")
+    if has_step_schedule and args.step_size_grid is not None:
+        raise ValueError("continuation step-size schedules cannot be combined with --step-size-grid")
+    for name, value in (
+        ("continuation_stage_rtol", stage_rtol),
+        ("continuation_stage_atol", stage_atol),
+    ):
+        if value is not None and (not np.isfinite(value) or value < 0):
+            raise ValueError(f"{name} must be finite and nonnegative")
+    if (stage_rtol is not None or stage_atol is not None) and (stage_rtol or 0) == 0 and (stage_atol or 0) == 0:
+        raise ValueError("continuation stage stopping requires a positive rtol or atol")
+    return list(zip(kappas, taus, max_iters, step_sizes, strict=True))
 
 
 def _method_config(
@@ -71,6 +95,7 @@ def _method_config(
     kappa: float | None = None,
     tau: float | None = None,
     max_iter: int | None = None,
+    step_size: float | None = None,
     x0=None,
     y0=None,
     theta0=None,
@@ -87,7 +112,7 @@ def _method_config(
         tau=args.smoothing_tau if tau is None else tau,
         max_iter=args.max_iter if max_iter is None else max_iter,
         batch_size=batch_size,
-        step_size=args.step_size,
+        step_size=args.step_size if step_size is None else step_size,
         step_decay=args.step_decay,
         seed=seed,
         logit_bound=optional_positive_float(args.logit_bound),
@@ -98,6 +123,9 @@ def _method_config(
         record_every=optional_positive_int(args.record_every),
         certify_every=optional_positive_int(args.certify_every),
         regret_tolerance=args.regret_tolerance,
+        stagnation_window=optional_positive_int(getattr(args, "stagnation_window", None)),
+        stagnation_rtol=getattr(args, "stagnation_rtol", 0.0),
+        stagnation_atol=getattr(args, "stagnation_atol", 0.0),
     )
 
 
@@ -118,7 +146,10 @@ def _run_method(
     x0 = None
     y0 = None
     theta0 = None
-    for stage, (kappa, tau, max_iter) in enumerate(_continuation_stages(args)):
+    previous_eta = None
+    stage_rtol = getattr(args, "continuation_stage_rtol", None)
+    stage_atol = getattr(args, "continuation_stage_atol", None)
+    for stage, (kappa, tau, max_iter, step_size) in enumerate(_continuation_stages(args)):
         config = _method_config(
             args,
             A.shape[0],
@@ -127,6 +158,7 @@ def _run_method(
             kappa=kappa,
             tau=tau,
             max_iter=max_iter,
+            step_size=step_size,
             x0=x0,
             y0=y0,
             theta0=theta0,
@@ -135,19 +167,36 @@ def _run_method(
             result = solve_msd_stochastic_fo(A, B, p, gamma=gamma, config=config)
         else:
             result = solve_cvar_stochastic_fo(A, B, p, gamma=gamma, alpha=alpha, config=config)
-        stage_runs.append(
-            {
-                "stage": stage,
-                "kappa": kappa,
-                "tau": tau,
-                "max_iter": max_iter,
-                "iteration_offset": iteration_offset,
-                "result": result,
-            }
+        current_eta = float(result.certificate.get("eta", np.inf))
+        stage_improvement = previous_eta - current_eta if previous_eta is not None else np.nan
+        stage_relative_improvement = (
+            stage_improvement / abs(previous_eta) if previous_eta is not None and previous_eta != 0 else np.nan
         )
+        stage_run = {
+            "stage": stage,
+            "kappa": kappa,
+            "tau": tau,
+            "max_iter": max_iter,
+            "step_size": step_size,
+            "iteration_offset": iteration_offset,
+            "stage_improvement": stage_improvement,
+            "stage_relative_improvement": stage_relative_improvement,
+            "result": result,
+        }
+        stage_runs.append(stage_run)
         iteration_offset += result.iterations
         if result.success:
+            stage_run["continuation_stop_reason"] = "regret_tolerance"
             break
+        if previous_eta is not None and (stage_rtol is not None or stage_atol is not None):
+            required = max(
+                0.0 if stage_atol is None else stage_atol,
+                (0.0 if stage_rtol is None else stage_rtol) * abs(previous_eta),
+            )
+            if stage_improvement < required:
+                stage_run["continuation_stop_reason"] = "stage_stagnation"
+                break
+        previous_eta = current_eta
         x0 = result.x
         y0 = result.y
         theta0 = result.theta
@@ -185,6 +234,8 @@ def _method_metrics(
     selected_offset = selected_run["iteration_offset"] if selected_run is not None else 0
     selected_kappa = selected_run["kappa"] if selected_run is not None else np.nan
     selected_tau = selected_run["tau"] if selected_run is not None else np.nan
+    selected_step_size = selected_run["step_size"] if selected_run is not None else np.nan
+    last_stage_run = stage_runs[-1] if stage_runs else None
     certificate_iteration = best_certificate.get("iteration")
     if certificate_iteration is not None:
         certificate_iteration += selected_offset
@@ -209,7 +260,14 @@ def _method_metrics(
         f"{prefix}_selected_stage": selected_stage,
         f"{prefix}_selected_kappa": selected_kappa,
         f"{prefix}_selected_tau": selected_tau,
+        f"{prefix}_selected_step_size": selected_step_size,
         f"{prefix}_stages_completed": len(stage_runs) if stage_runs else 1,
+        f"{prefix}_termination_reason": (
+            last_stage_run["result"].termination_reason if last_stage_run is not None else result.termination_reason
+        ),
+        f"{prefix}_continuation_stop_reason": (
+            last_stage_run.get("continuation_stop_reason") if last_stage_run is not None else None
+        ),
         f"{prefix}_theta1": float(theta[0]),
         f"{prefix}_theta2": float(theta[1]),
         f"{prefix}_error": method_error,
@@ -258,7 +316,7 @@ def _history_rows(
             "alpha": args.alpha if risk == "cvar" else np.nan,
             "entropy_kappa": stage_run["kappa"],
             "smoothing_tau": stage_run["tau"],
-            "step_size": args.step_size,
+            "step_size": stage_run["step_size"],
             "step_decay": args.step_decay,
             "max_iter": stage_run["max_iter"],
             "minibatch_size": stochastic_minibatch_size(args, K),
@@ -270,6 +328,10 @@ def _history_rows(
             "stage_iteration": checkpoint["iteration"],
             "iteration": stage_run["iteration_offset"] + checkpoint["iteration"],
             "selected_stage": bool(stage_run.get("selected", False)),
+            "stage_improvement": stage_run["stage_improvement"],
+            "stage_relative_improvement": stage_run["stage_relative_improvement"],
+            "stage_termination_reason": result.termination_reason,
+            "continuation_stop_reason": stage_run.get("continuation_stop_reason"),
             "residual_norm": checkpoint["residual_norm"],
             "objective": checkpoint["objective"],
             "eta": checkpoint.get("eta", np.nan),
@@ -302,18 +364,24 @@ def run_instance(
         "entropy_kappa": stages[0][0],
         "smoothing_tau": stages[0][1],
         "max_iter": stages[0][2],
+        "step_size": stages[0][3],
         "minibatch_size": stochastic_minibatch_size(args, K),
-        "step_size": args.step_size,
         "step_decay": args.step_decay,
         "regret_tolerance": args.regret_tolerance,
         "record_every": args.record_every,
         "certify_every": args.certify_every,
         "continuation": getattr(args, "continuation_kappa", None) is not None,
         "continuation_stages": len(stages),
-        "continuation_kappa": ",".join(f"{kappa:g}" for kappa, _, _ in stages),
-        "continuation_tau": ",".join(f"{tau:g}" for _, tau, _ in stages),
-        "continuation_max_iter": ",".join(str(max_iter) for _, _, max_iter in stages),
-        "continuation_total_max_iter": sum(max_iter for _, _, max_iter in stages),
+        "continuation_kappa": ",".join(f"{kappa:g}" for kappa, _, _, _ in stages),
+        "continuation_tau": ",".join(f"{tau:g}" for _, tau, _, _ in stages),
+        "continuation_max_iter": ",".join(str(max_iter) for _, _, max_iter, _ in stages),
+        "continuation_step_size": ",".join(f"{step_size:g}" for _, _, _, step_size in stages),
+        "continuation_total_max_iter": sum(max_iter for _, _, max_iter, _ in stages),
+        "stagnation_window": getattr(args, "stagnation_window", None),
+        "stagnation_rtol": getattr(args, "stagnation_rtol", 0.0),
+        "stagnation_atol": getattr(args, "stagnation_atol", 0.0),
+        "continuation_stage_rtol": getattr(args, "continuation_stage_rtol", None),
+        "continuation_stage_atol": getattr(args, "continuation_stage_atol", None),
         "methods": ",".join(args.methods),
     }
 
@@ -408,6 +476,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--continuation-kappa", type=float, nargs="+", default=None)
     parser.add_argument("--continuation-tau", type=float, nargs="+", default=None)
     parser.add_argument("--continuation-max-iter", type=int, nargs="+", default=None)
+    parser.add_argument("--continuation-step-size", type=float, nargs="+", default=None)
+    parser.add_argument("--continuation-stage-rtol", type=float, default=None)
+    parser.add_argument("--continuation-stage-atol", type=float, default=None)
     parser.add_argument("--max-iter", type=int, default=1000)
     parser.add_argument("--batch-size", type=int, default=None)
     parser.add_argument("--step-size", type=float, default=0.2)
@@ -417,6 +488,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--gradient-clip-norm", type=float, default=None)
     parser.add_argument("--record-every", type=int, default=0)
     parser.add_argument("--certify-every", type=int, default=0)
+    parser.add_argument("--stagnation-window", type=int, default=None)
+    parser.add_argument("--stagnation-rtol", type=float, default=0.0)
+    parser.add_argument("--stagnation-atol", type=float, default=0.0)
     parser.add_argument("--regret-tolerance", type=float, default=1e-2)
     parser.add_argument(
         "--methods",
@@ -471,6 +545,7 @@ def main() -> None:
                                     setting_text = (
                                         f"continuation_kappa={row['continuation_kappa']} "
                                         f"continuation_tau={row['continuation_tau']} "
+                                        f"continuation_step={row['continuation_step_size']} "
                                     )
                                 else:
                                     setting_text = (
