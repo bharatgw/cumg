@@ -98,16 +98,6 @@ python experiments/compare_scalability_approaches.py \
 `--rep-stop` is exclusive. Seeds are computed from the original absolute
 replicate index, so shard outputs recombine consistently.
 
-## GitLab Later
-
-After the VM command line workflow is stable, the same VM can be registered as a
-GitLab self-hosted shell runner. That lets GitLab launch the same shard commands
-and collect CSV artifacts. If the self-hosted runner is your laptop, it does not
-add compute beyond local execution; it only adds CI logs and artifacts.
-
-Use a custom Docker image only when switching to a Docker executor or shared
-runners. Solver binaries and licenses make that the harder first step.
-
 ## Notebook Merge
 
 Copy or sync the CSV shards back into the repo, then merge them in the analysis

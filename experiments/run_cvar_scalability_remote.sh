@@ -6,6 +6,7 @@ set -euo pipefail
 WORKERS="${WORKERS:-8}"
 REPS="${REPS:-20}"
 SEED_BASE="${SEED_BASE:-123}"
+RISK_GRID="${RISK_GRID:-cvar}"
 K_GRID="${K_GRID:-5 10 30 100 250 500}"
 N_GRID="${N_GRID:-5 10 20 50}"
 METHODS="${METHODS:-mcp screened_dual action_dual restricted_mcp stochastic_full_batch stochastic_minibatch}"
@@ -13,6 +14,7 @@ METHODS="${METHODS:-mcp screened_dual action_dual restricted_mcp stochastic_full
 GAMMA="${GAMMA:-0.5}"
 ALPHA="${ALPHA:-0.5}"
 EPSILON="${EPSILON:-0.01}"
+EPSILON_SCR="${EPSILON_SCR:-}"
 STOCHASTIC_REGRET_TOLERANCE="${STOCHASTIC_REGRET_TOLERANCE:-0.001}"
 MAX_CANDIDATES="${MAX_CANDIDATES:-1000}"
 N_SCREEN_STARTS="${N_SCREEN_STARTS:-3}"
@@ -73,7 +75,7 @@ fi
 mkdir -p "$RESULT_DIR" "$LOG_DIR"
 
 run_config="$(printf '%s\n' \
-  "risk=cvar" \
+  "risk=$RISK_GRID" \
   "K_GRID=$K_GRID" \
   "N_GRID=$N_GRID" \
   "REPS=$REPS" \
@@ -94,6 +96,9 @@ run_config="$(printf '%s\n' \
   "FALLBACK_SOLVER=$FALLBACK_SOLVER" \
   "WORKERS=$WORKERS" \
   "RUN_TIMEOUT_SECONDS=$RUN_TIMEOUT_SECONDS")"
+if [[ -n "$EPSILON_SCR" ]]; then
+  run_config+=$'\n'"EPSILON_SCR=$EPSILON_SCR"
+fi
 
 if [[ -f "$CONFIG_FILE" ]]; then
   if [[ "$(cat "$CONFIG_FILE")" != "$run_config" ]]; then
@@ -111,7 +116,7 @@ else
   } > "$RESULT_DIR/run_environment.txt"
 fi
 
-if (( DRY_RUN == 0 )); then
+if (( DRY_RUN == 0 )) && [[ " $METHODS " == *" mcp "* || " $METHODS " == *" restricted_mcp "* ]]; then
   "$PYTHON_BIN" -c '
 import sys
 from cumg import format_solver_availability, solver_available
@@ -125,8 +130,8 @@ if not solver_available(solver):
 ' "$SOLVER" "$FALLBACK_SOLVER"
 fi
 
-# Keep every worker single-threaded so eight processes do not each create their
-# own BLAS/JAX thread pool.
+# Keep every worker single-threaded so concurrent processes do not each create
+# their own BLAS/JAX thread pool.
 export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
 export OPENBLAS_NUM_THREADS="${OPENBLAS_NUM_THREADS:-1}"
 export MKL_NUM_THREADS="${MKL_NUM_THREADS:-1}"
@@ -135,29 +140,40 @@ export VECLIB_MAXIMUM_THREADS="${VECLIB_MAXIMUM_THREADS:-1}"
 export XLA_FLAGS="${XLA_FLAGS:---xla_cpu_multi_thread_eigen=false intra_op_parallelism_threads=1}"
 
 export PYTHON_BIN RESULT_DIR LOG_DIR REPS SEED_BASE METHODS
-export GAMMA ALPHA EPSILON STOCHASTIC_REGRET_TOLERANCE
+export GAMMA ALPHA EPSILON EPSILON_SCR STOCHASTIC_REGRET_TOLERANCE
 export MAX_CANDIDATES N_SCREEN_STARTS N_SUPPORT_STARTS
 export SCREEN_MAXITER SUPPORT_MAXITER MAX_ITER CERTIFY_EVERY
 export SOLVER FALLBACK_SOLVER RUN_TIMEOUT_SECONDS DRY_RUN
 
-printf 'Launching CVaR scalability run with %s workers; results=%s\n' "$WORKERS" "$RESULT_DIR"
+printf 'Launching scalability run for risks [%s] with %s workers; results=%s\n' \
+  "$RISK_GRID" "$WORKERS" "$RESULT_DIR"
 
-for K in $K_GRID; do
-  require_positive_integer K "$K"
-  for n in $N_GRID; do
-    require_positive_integer n "$n"
-    for ((rep = 0; rep < REPS; rep++)); do
-      printf '%s %s %s\n' "$K" "$n" "$rep"
+for risk in $RISK_GRID; do
+  case "$risk" in
+    msd|cvar) ;;
+    *)
+      echo "Unsupported risk: $risk" >&2
+      exit 2
+      ;;
+  esac
+  for K in $K_GRID; do
+    require_positive_integer K "$K"
+    for n in $N_GRID; do
+      require_positive_integer n "$n"
+      for ((rep = 0; rep < REPS; rep++)); do
+        printf '%s %s %s %s\n' "$risk" "$K" "$n" "$rep"
+      done
     done
   done
-done | xargs -n 3 -P "$WORKERS" bash -c '
+done | xargs -n 4 -P "$WORKERS" bash -c '
   set -euo pipefail
 
-  K="$1"
-  n="$2"
-  rep="$3"
+  risk="$1"
+  K="$2"
+  n="$3"
+  rep="$4"
   rep_stop=$((rep + 1))
-  stem=$(printf "cvar_K%s_n%s_rep%03d" "$K" "$n" "$rep")
+  stem=$(printf "%s_K%s_n%s_rep%03d" "$risk" "$K" "$n" "$rep")
   out="$RESULT_DIR/${stem}.csv"
   lock_dir="$RESULT_DIR/.${stem}.lock"
 
@@ -167,7 +183,7 @@ done | xargs -n 3 -P "$WORKERS" bash -c '
       echo "SKIP complete: $stem"
       exit 0
     fi
-    if (( line_count > 2 )); then
+    if (( lƒine_count > 2 )); then
       echo "ERROR $out has $line_count lines; expected exactly 2" >&2
       exit 1
     fi
@@ -189,7 +205,7 @@ done | xargs -n 3 -P "$WORKERS" bash -c '
   read -r -a method_args <<< "$METHODS"
   command=(
     "$PYTHON_BIN" experiments/compare_scalability_approaches.py
-    --risk cvar
+    --risk "$risk"
     --K "$K"
     --n "$n"
     --reps "$REPS"
@@ -213,6 +229,9 @@ done | xargs -n 3 -P "$WORKERS" bash -c '
     --csv "$out"
     --quiet
   )
+  if [[ -n "$EPSILON_SCR" ]]; then
+    command+=(--epsilon-scr "$EPSILON_SCR")
+  fi
 
   if (( DRY_RUN != 0 )); then
     printf "DRY RUN:"
@@ -221,7 +240,7 @@ done | xargs -n 3 -P "$WORKERS" bash -c '
     exit 0
   fi
 
-  echo "START $(date "+%Y-%m-%dT%H:%M:%S%z") K=$K n=$n rep=$rep" | tee "$log"
+  echo "START $(date "+%Y-%m-%dT%H:%M:%S%z") risk=$risk K=$K n=$n rep=$rep" | tee "$log"
   set +e
   if (( RUN_TIMEOUT_SECONDS > 0 )); then
     timeout --signal=TERM --kill-after=60s "$RUN_TIMEOUT_SECONDS" \
@@ -231,7 +250,7 @@ done | xargs -n 3 -P "$WORKERS" bash -c '
   fi
   status=$?
   set -e
-  echo "END $(date "+%Y-%m-%dT%H:%M:%S%z") status=$status K=$K n=$n rep=$rep" \
+  echo "END $(date "+%Y-%m-%dT%H:%M:%S%z") status=$status risk=$risk K=$K n=$n rep=$rep" \
     | tee -a "$log"
   exit "$status"
 ' _

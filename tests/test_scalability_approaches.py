@@ -9,6 +9,8 @@ import pytest
 
 pytest.importorskip("jax")
 
+from cumg.results import SupportSearchResult
+
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "experiments" / "compare_scalability_approaches.py"
 SPEC = importlib.util.spec_from_file_location("compare_scalability_approaches", SCRIPT)
@@ -128,6 +130,37 @@ def test_scalability_driver_records_best_certificate_iteration():
     )
 
     assert row["stochastic_full_batch_best_certificate_iteration"] == 0
+
+
+def test_scalability_driver_records_best_rejected_screen():
+    result = SupportSearchResult(
+        success=False,
+        metadata={
+            "best_screen": {
+                "eta": 0.03,
+                "success": True,
+                "violation": 1e-12,
+                "candidate_index": 17,
+                "message": "Optimization terminated successfully",
+            }
+        },
+    )
+
+    metrics = compare_scalability_approaches._support_result_metrics(
+        "screened_dual", result, elapsed_s=2.5, error=None
+    )
+
+    assert not metrics["screened_dual_success"]
+    assert np.isnan(metrics["screened_dual_eta"])
+    assert metrics["screened_dual_screen_eta"] == pytest.approx(0.03)
+    assert metrics["screened_dual_best_screen_eta"] == pytest.approx(0.03)
+    assert metrics["screened_dual_best_screen_success"]
+    assert metrics["screened_dual_best_screen_violation"] == pytest.approx(1e-12)
+    assert metrics["screened_dual_best_screen_candidate_index"] == 17
+    assert (
+        metrics["screened_dual_best_screen_message"]
+        == "Optimization terminated successfully"
+    )
 
 
 def test_scalability_driver_records_mcp_errors(monkeypatch):

@@ -1239,6 +1239,7 @@ def _certified_search(
                 **screen_kwargs,
             )
             screen["time_s"] = perf_counter() - start
+            screen["candidate_index"] = idx
             if best_screen is None:
                 best_screen = screen
             elif screen["eta"] < best_screen["eta"]:
@@ -1263,6 +1264,7 @@ def _certified_search(
                 )
                 candidate = {
                     "screen": screen,
+                    "best_screen": best_screen,
                     "support_certificate": support_cert,
                     "certificate": support_cert["certificate"],
                     "candidate_index": idx,

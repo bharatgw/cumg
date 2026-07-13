@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 from sample_games import dominant_action_game, matching_pennies_game
 
+import cumg.small_support as small_support_module
 from cumg.cvar import cvar_profile_values, cvar_value_from_state_payoffs
 from cumg.msd import msd_profile_values, msd_value_from_state_payoffs
 from cumg.results import SupportSearchConfig
@@ -155,6 +156,42 @@ def test_restricted_screen_returns_feasible_simplex_profile():
     np.testing.assert_allclose(screen["y"].sum(), 1.0, atol=1e-8)
     assert np.all(screen["x"] >= -1e-8)
     assert np.all(screen["y"] >= -1e-8)
+
+
+def test_small_support_search_retains_rejected_screen_candidate_index(monkeypatch):
+    A, B, p = dominant_action_game()
+
+    def rejected_screen(_A, _B, _p, *, S, T, **_kwargs):
+        return {
+            "eta": 0.03,
+            "violation": 1e-12,
+            "success": True,
+            "message": "Optimization terminated successfully",
+            "x": np.array([0.5, 0.5]),
+            "y": np.array([0.5, 0.5]),
+            "S": S,
+            "T": T,
+        }
+
+    monkeypatch.setattr(
+        small_support_module, "restricted_profile_gap_msd", rejected_screen
+    )
+    config = SupportSearchConfig(
+        epsilon=0.01,
+        epsilon_scr=0.01,
+        kappa=2,
+        tau=2,
+        max_candidates=1,
+        seed=0,
+    )
+
+    result = small_support_module.small_support_search_msd(
+        A, B, p, gamma=0.5, config=config
+    )
+
+    assert not result.success
+    assert result.metadata["best_screen"]["eta"] == pytest.approx(0.03)
+    assert result.metadata["best_screen"]["candidate_index"] == 1
 
 
 def test_dominant_action_regret_is_nonnegative_for_mixed_profile():

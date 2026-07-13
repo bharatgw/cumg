@@ -188,6 +188,11 @@ def _empty_method_metrics(
         f"{prefix}_candidate_index": None,
         f"{prefix}_support_eta": np.nan,
         f"{prefix}_screen_eta": np.nan,
+        f"{prefix}_best_screen_eta": np.nan,
+        f"{prefix}_best_screen_success": None,
+        f"{prefix}_best_screen_violation": np.nan,
+        f"{prefix}_best_screen_candidate_index": None,
+        f"{prefix}_best_screen_message": None,
         f"{prefix}_support_violation": np.nan,
         f"{prefix}_residual_norm": np.nan,
         f"{prefix}_objective": np.nan,
@@ -236,7 +241,24 @@ def _support_result_metrics(prefix: str, result, elapsed_s: float, error: str | 
         error if error is not None else getattr(result, "best_error", None),
     )
     candidate = _candidate_from_support_result(result)
+    best_screen = result.metadata.get("best_screen", {}) if result is not None else {}
+    if not best_screen and candidate is not None:
+        best_screen = candidate.get("best_screen", candidate.get("screen", {}))
+    out.update(
+        {
+            f"{prefix}_best_screen_eta": float(best_screen.get("eta", np.nan)),
+            f"{prefix}_best_screen_success": best_screen.get("success"),
+            f"{prefix}_best_screen_violation": float(
+                best_screen.get("violation", np.nan)
+            ),
+            f"{prefix}_best_screen_candidate_index": best_screen.get(
+                "candidate_index"
+            ),
+            f"{prefix}_best_screen_message": best_screen.get("message"),
+        }
+    )
     if candidate is None:
+        out[f"{prefix}_screen_eta"] = float(best_screen.get("eta", np.nan))
         return out
     screen = candidate.get("screen", {})
     support_cert = candidate.get("support_certificate", {})
