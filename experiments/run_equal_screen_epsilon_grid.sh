@@ -17,4 +17,3 @@ export RESULT_DIR="${RESULT_DIR:-experiments/results/remote/higher_eps/$VERSION}
 export LOG_DIR="${LOG_DIR:-$RESULT_DIR/logs}"
 
 exec "$SCRIPT_DIR/run_cvar_scalability_remote.sh"
-pause

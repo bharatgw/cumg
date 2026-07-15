@@ -183,7 +183,7 @@ done | xargs -n 4 -P "$WORKERS" bash -c '
       echo "SKIP complete: $stem"
       exit 0
     fi
-    if (( lƒine_count > 2 )); then
+    if (( line_count > 2 )); then
       echo "ERROR $out has $line_count lines; expected exactly 2" >&2
       exit 1
     fi
