@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 VERSION="${VERSION:-v1}"
 export VERSION
-export WORKERS="${WORKERS:-10}"
+export WORKERS="${WORKERS:-8}"
 export REPS="${REPS:-20}"
 export RISK_GRID="${RISK_GRID:-msd cvar}"
 export K_GRID="${K_GRID:-5 10 30 100 250 500}"
