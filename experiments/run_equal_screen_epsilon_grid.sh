@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-VERSION="${VERSION:-v2}"
+VERSION="${VERSION:-v1}"
 export VERSION
 export WORKERS="${WORKERS:-10}"
 export REPS="${REPS:-20}"
