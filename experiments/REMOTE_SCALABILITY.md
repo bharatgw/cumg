@@ -98,6 +98,53 @@ python experiments/compare_scalability_approaches.py \
 `--rep-stop` is exclusive. Seeds are computed from the original absolute
 replicate index, so shard outputs recombine consistently.
 
+## Resume CVaR With a Per-Method Cap
+
+Use the capped resume runner if an uncapped CVaR campaign has reached its
+practical time limit. Stop the old runner and its child workers first. The new
+runner refuses to start while a legacy `.cvar_*.lock` directory is present, so
+it cannot silently duplicate active work.
+
+The default protocol applies a 24-hour wall-clock cap separately to every
+`(risk, K, n, replicate, method)` task. It:
+
+- reuses a legacy method result when its recorded runtime is at most 24 hours;
+- classifies a legacy result taking more than 24 hours as a timeout;
+- launches only methods missing from incomplete or unstarted legacy rows;
+- runs methods in independent processes so one timeout cannot block later
+  methods; and
+- writes a long-form `capped_method_results.csv` containing completed,
+  timed-out, errored, and pending tasks.
+
+From the repository root on the remote machine:
+
+```bash
+nohup ./experiments/run_cvar_scalability_capped_resume.sh \
+  > capped_24h_runner.log 2>&1 &
+```
+
+The defaults resume from
+`experiments/results/remote/cvar_scalability/v1` into
+`experiments/results/remote/cvar_scalability/capped_24h_v1`. To inspect the
+plan without launching methods:
+
+```bash
+DRY_RUN=1 ./experiments/run_cvar_scalability_capped_resume.sh
+```
+
+The command is restartable. Completed method shards and timeout markers are
+skipped on subsequent invocations. A non-timeout process error is recorded and
+skipped by default; set `RETRY_ERRORS=1` to retry those tasks after inspecting
+their logs.
+
+Do not mix cap values in one result directory. To use a different cap, choose
+both a new limit and a new version, for example:
+
+```bash
+METHOD_TIME_LIMIT_SECONDS=172800 VERSION=capped_48h_v1 \
+  ./experiments/run_cvar_scalability_capped_resume.sh
+```
+
 ## Notebook Merge
 
 Copy or sync the CSV shards back into the repo, then merge them in the analysis
