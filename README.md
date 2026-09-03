@@ -61,12 +61,12 @@ baseline on the same game seeds.*
 - **CVaR equilibrium solves take longer.** Within the displayed grid, 126 of
   1,920 configured CVaR method runs reached the 24-hour cap: 75 action-dual and
   51 screened-dual runs. No other method recorded a timeout.
-- **Fast completion is not the same as successful certification.** Direct MCP
+- **Exact methods do not converge with scale.** Direct MCP
   and restricted MCP often terminate much sooner than the sparse-support
   methods, but their common-certificate rates fall sharply as the action space
   grows. At `K=500, n=50`, neither method certifies any of the 20 games under
   either risk model.
-- **Sparse-support robustness is costly.** Action dual certifies all 320
+- **Sparse-support robustness takes time.** Action dual certifies all 320
   displayed MSD instances, but its median runtime across those instances is
   about 300 seconds. Under CVaR its certificate rate is 245/320 and it accounts
   for most capped runs.
@@ -82,6 +82,7 @@ baseline on the same game seeds.*
   every `K=500` instance. This is an empirical feature of the i.i.d. Uniform[0,1]
   payoff design: averaging over more payoff samples makes the risk-adjusted values of
   alternative actions increasingly similar.
+
 These comparisons are descriptive of the committed random-instance design and
 fixed algorithm configurations. They do not establish asymptotic dominance,
 and capped CVaR runtimes should not be interpreted as completed solve times.
