@@ -79,9 +79,9 @@ baseline on the same game seeds.*
   these random games.
 - **The random-game design has a strong concentration effect.** The uniform
   profile is already certified on 253/320 CVaR and 231/320 MSD instances and on
-  every `K=500` instance. This is expected with high probability given the proof
-  of Theorem 4 in the paper.
-
+  every `K=500` instance. This is an empirical feature of the i.i.d. Uniform[0,1]
+  payoff design: averaging over more payoff samples makes the risk-adjusted values of
+  alternative actions increasingly similar.
 These comparisons are descriptive of the committed random-instance design and
 fixed algorithm configurations. They do not establish asymptotic dominance,
 and capped CVaR runtimes should not be interpreted as completed solve times.
