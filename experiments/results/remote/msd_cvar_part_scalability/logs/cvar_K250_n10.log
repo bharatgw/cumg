@@ -1,0 +1,37 @@
+START 2026-07-14T11:48:01+08:00 risk=cvar K=250 n=10
+Traceback (most recent call last):
+  File "<repo>/experiments/compare_scalability_approaches.py", line 703, in <module>
+    main()
+  File "<repo>/experiments/compare_scalability_approaches.py", line 694, in main
+    rows = run_experiment(args, row_callback=writer.write_row)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<repo>/experiments/compare_scalability_approaches.py", line 565, in run_experiment
+    row = run_instance(args, risk, K, n, seed)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<repo>/experiments/compare_scalability_approaches.py", line 526, in run_instance
+    result, metrics, _ = _run_method(
+                         ^^^^^^^^^^^^
+  File "<repo>/experiments/compare_scalability_approaches.py", line 413, in _run_method
+    result = _run_support_method(method, risk, A, B, p, args, support_config)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<repo>/experiments/compare_scalability_approaches.py", line 349, in _run_support_method
+    return small_support_search_cvar(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<repo>/src/cumg/small_support.py", line 1504, in small_support_search_cvar
+    return _certified_search(
+           ^^^^^^^^^^^^^^^^^^
+  File "<repo>/src/cumg/small_support.py", line 1249, in _certified_search
+    support_cert = _call_support_gap(
+                   ^^^^^^^^^^^^^^^^^^
+  File "<repo>/src/cumg/small_support.py", line 1334, in _call_support_gap
+    return support_gap_fn(A, B, p, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<repo>/src/cumg/small_support.py", line 1167, in supported_profile_gap_cvar_dual
+    res = minimize(
+          ^^^^^^^^^
+  File "<repo>/.venv/lib/python3.12/site-packages/scipy/optimize/_minimize.py", line 796, in minimize
+    res = _minimize_slsqp(fun, x0, args, jac, bounds,
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<repo>/.venv/lib/python3.12/site-packages/scipy/optimize/_slsqp_py.py", line 526, in _minimize_slsqp
+    slsqp(state_dict, fx, g, C, d, x, mult, xl, xu, buffer, indices)
+KeyboardInterrupt

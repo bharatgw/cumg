@@ -1,0 +1,62 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install package
+        run: python -m pip install -e ".[dev]"
+
+      - name: Run ruff
+        run: |
+          python -m ruff check src tests examples experiments/generate_readme_figures.py
+          python -m ruff format --check src tests examples experiments/generate_readme_figures.py
+
+      - name: Compile Python files
+        run: python -m compileall src tests examples experiments/generate_readme_figures.py
+
+      - name: Run tests
+        run: python -m pytest -m "not solver"
+
+  solver-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Conda with Python and IPOPT
+        uses: conda-incubator/setup-miniconda@v4
+        with:
+          activate-environment: cumg-ci
+          auto-update-conda: false
+          conda-remove-defaults: "true"
+          channel-priority: strict
+          channels: conda-forge
+          python-version: "3.12"
+
+      - name: Install package
+        shell: bash -el {0}
+        run: |
+          conda install -y pip ipopt
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+          python -c "import pyomo.environ as pyo; assert pyo.SolverFactory('ipopt').available(False)"
+
+      - name: Run solver tests
+        shell: bash -el {0}
+        run: python -m pytest -m solver
