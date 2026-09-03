@@ -204,9 +204,7 @@ def _result_record(
 
     record = _base_record(task, args)
     record.update({field: row.get(field, "") for field in COMMON_RESULT_FIELDS})
-    method_values = {
-        field: row.get(f"{task.method}_{field}", "") for field in METHOD_RESULT_FIELDS
-    }
+    method_values = {field: row.get(f"{task.method}_{field}", "") for field in METHOD_RESULT_FIELDS}
     timed_out = observed_time > args.time_limit_seconds
     record.update(
         {
@@ -224,9 +222,7 @@ def _result_record(
         record["uncapped_eta"] = method_values["eta"]
         return record
 
-    record.update(
-        {field: value for field, value in method_values.items() if field != "success"}
-    )
+    record.update({field: value for field, value in method_values.items() if field != "success"})
     return record
 
 
@@ -241,9 +237,7 @@ def _status_record(
         status = json.load(f)
     marker_limit = int(status["time_limit_s"])
     if marker_limit != args.time_limit_seconds:
-        raise ValueError(
-            f"Time-limit mismatch in {status_path}: {marker_limit} != {args.time_limit_seconds}."
-        )
+        raise ValueError(f"Time-limit mismatch in {status_path}: {marker_limit} != {args.time_limit_seconds}.")
     record = _base_record(task, args)
     marker_status = status.get("status", "error")
     elapsed = _finite_float(status.get("elapsed_s"))
@@ -361,9 +355,7 @@ def _add_grid_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--reps", type=int, default=DEFAULT_REPS)
     parser.add_argument("--seed-base", type=int, default=DEFAULT_SEED_BASE)
     parser.add_argument("--methods", nargs="+", choices=METHODS, default=list(METHODS))
-    parser.add_argument(
-        "--time-limit-seconds", type=int, default=DEFAULT_TIME_LIMIT_SECONDS
-    )
+    parser.add_argument("--time-limit-seconds", type=int, default=DEFAULT_TIME_LIMIT_SECONDS)
 
 
 def parse_args() -> argparse.Namespace:
@@ -391,9 +383,7 @@ def parse_args() -> argparse.Namespace:
     record_parser.add_argument("--seed-base", type=int, default=DEFAULT_SEED_BASE)
     record_parser.add_argument("--status", choices=("timeout", "error"), required=True)
     record_parser.add_argument("--elapsed-s", type=float, required=True)
-    record_parser.add_argument(
-        "--time-limit-seconds", type=int, default=DEFAULT_TIME_LIMIT_SECONDS
-    )
+    record_parser.add_argument("--time-limit-seconds", type=int, default=DEFAULT_TIME_LIMIT_SECONDS)
     record_parser.add_argument("--exit-code", type=int, required=True)
     record_parser.add_argument("--message", default="")
 

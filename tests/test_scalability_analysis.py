@@ -187,3 +187,26 @@ def test_prepare_v3_history_is_safe_to_rerun() -> None:
 
     pd.testing.assert_frame_equal(once, twice)
     assert once["best_eta_so_far"].tolist() == [3.0, 2.0, 5.0, 5.0]
+
+
+def test_prepare_v3_plot_history_keeps_a_fixed_cohort() -> None:
+    summary = pd.DataFrame({"shard": ["short", "long"], "step_size": [10.0, 10.0]})
+    history = pd.DataFrame(
+        {
+            "shard": ["short", "short", "long", "long", "long"],
+            "risk": ["cvar"] * 5,
+            "K": [250] * 5,
+            "n": [20] * 5,
+            "method": ["full_batch"] * 5,
+            "iteration": [0, 1, 0, 1, 2],
+            "eta": [3.0, 1.0, 5.0, 4.0, 3.0],
+        }
+    )
+
+    prepared = analysis.prepare_v3_plot_history(history, summary)
+    counts = prepared.groupby("iteration")["shard"].nunique()
+    medians = prepared.groupby("iteration")["best_eta_so_far"].median()
+
+    assert counts.tolist() == [2, 2, 2]
+    assert medians.tolist() == pytest.approx([4.0, 2.5, 2.0])
+    assert medians.diff().dropna().le(0).all()

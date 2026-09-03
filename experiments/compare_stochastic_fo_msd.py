@@ -35,9 +35,7 @@ from compare_scalability_approaches import (  # noqa: E402
 from cumg import StochasticFOConfig, solve_msd_stochastic_fo  # noqa: E402
 
 
-def _method_config(
-    args: argparse.Namespace, K: int, seed: int, method: str
-) -> StochasticFOConfig:
+def _method_config(args: argparse.Namespace, K: int, seed: int, method: str) -> StochasticFOConfig:
     if method == "full_batch":
         batch_size = None
     elif method == "minibatch":
@@ -71,41 +69,25 @@ def _run_method(name: str, A, B, p, gamma: float, args: argparse.Namespace, seed
         return None, perf_counter() - start, str(exc)
 
 
-def _method_metrics(
-    prefix: str, result, elapsed_s: float, error: str | None = None
-) -> dict[str, Any]:
+def _method_metrics(prefix: str, result, elapsed_s: float, error: str | None = None) -> dict[str, Any]:
     cert = result.certificate if result is not None else {}
     best_iterate = result.best_iterate if result is not None else {}
-    best_certificate = (
-        result.best_certificate
-        if result is not None and result.best_certificate is not None
-        else {}
-    )
+    best_certificate = result.best_certificate if result is not None and result.best_certificate is not None else {}
     method_error = error
 
     return {
         f"{prefix}_success": bool(result.success) if result is not None else False,
         f"{prefix}_time_s": elapsed_s,
-        f"{prefix}_solve_time_s": (
-            float(result.solve_time_s) if result is not None else np.nan
-        ),
+        f"{prefix}_solve_time_s": (float(result.solve_time_s) if result is not None else np.nan),
         f"{prefix}_eta": float(cert.get("eta", np.nan)),
         f"{prefix}_regret1": float(cert.get("regret1", np.nan)),
         f"{prefix}_regret2": float(cert.get("regret2", np.nan)),
-        f"{prefix}_residual_norm": (
-            float(result.residual_norm) if result is not None else np.nan
-        ),
-        f"{prefix}_objective": (
-            float(result.objective) if result is not None else np.nan
-        ),
+        f"{prefix}_residual_norm": (float(result.residual_norm) if result is not None else np.nan),
+        f"{prefix}_objective": (float(result.objective) if result is not None else np.nan),
         f"{prefix}_iterations": result.iterations if result is not None else None,
-        f"{prefix}_has_profile": result is not None
-        and result.x is not None
-        and result.y is not None,
+        f"{prefix}_has_profile": result is not None and result.x is not None and result.y is not None,
         f"{prefix}_history_len": len(result.history) if result is not None else 0,
-        f"{prefix}_best_residual_norm": float(
-            best_iterate.get("residual_norm", np.nan)
-        ),
+        f"{prefix}_best_residual_norm": float(best_iterate.get("residual_norm", np.nan)),
         f"{prefix}_best_objective": float(best_iterate.get("objective", np.nan)),
         f"{prefix}_best_certificate_eta": float(best_certificate.get("eta", np.nan)),
         f"{prefix}_best_certificate_iteration": best_certificate.get("iteration"),
@@ -116,32 +98,17 @@ def _method_metrics(
 def _pairwise_metrics(row: dict[str, Any], results: dict[str, Any]) -> None:
     if "full_batch" not in results or "minibatch" not in results:
         return
-    row["eta_diff_minibatch_minus_full_batch"] = (
-        row["minibatch_eta"] - row["full_batch_eta"]
-    )
-    row["residual_diff_minibatch_minus_full_batch"] = (
-        row["minibatch_residual_norm"] - row["full_batch_residual_norm"]
-    )
+    row["eta_diff_minibatch_minus_full_batch"] = row["minibatch_eta"] - row["full_batch_eta"]
+    row["residual_diff_minibatch_minus_full_batch"] = row["minibatch_residual_norm"] - row["full_batch_residual_norm"]
     row["time_ratio_minibatch_over_full_batch"] = (
-        row["minibatch_time_s"] / row["full_batch_time_s"]
-        if row["full_batch_time_s"] > 0
-        else np.nan
+        row["minibatch_time_s"] / row["full_batch_time_s"] if row["full_batch_time_s"] > 0 else np.nan
     )
 
     full_batch = results["full_batch"]
     minibatch = results["minibatch"]
-    if (
-        full_batch is not None
-        and minibatch is not None
-        and full_batch.x is not None
-        and minibatch.x is not None
-    ):
-        row["x_l1_minibatch_minus_full_batch"] = float(
-            np.sum(np.abs(minibatch.x - full_batch.x))
-        )
-        row["y_l1_minibatch_minus_full_batch"] = float(
-            np.sum(np.abs(minibatch.y - full_batch.y))
-        )
+    if full_batch is not None and minibatch is not None and full_batch.x is not None and minibatch.x is not None:
+        row["x_l1_minibatch_minus_full_batch"] = float(np.sum(np.abs(minibatch.x - full_batch.x)))
+        row["y_l1_minibatch_minus_full_batch"] = float(np.sum(np.abs(minibatch.y - full_batch.y)))
     else:
         row["x_l1_minibatch_minus_full_batch"] = np.nan
         row["y_l1_minibatch_minus_full_batch"] = np.nan
@@ -228,9 +195,7 @@ def print_summary(rows: list[dict[str, Any]], methods: list[str]) -> None:
     print("\nSummary")
     print("-------")
     for prefix in methods:
-        success = np.array(
-            [bool(row[f"{prefix}_success"]) for row in rows], dtype=float
-        )
+        success = np.array([bool(row[f"{prefix}_success"]) for row in rows], dtype=float)
         times = _finite_values(rows, f"{prefix}_time_s")
         etas = _finite_values(rows, f"{prefix}_eta")
         residuals = _finite_values(rows, f"{prefix}_residual_norm")
@@ -252,13 +217,9 @@ def print_summary(rows: list[dict[str, Any]], methods: list[str]) -> None:
         if ratios.size:
             print(f"minibatch/full_batch median time ratio: {np.median(ratios):.4g}")
         if eta_diffs.size:
-            print(
-                f"median eta difference, minibatch - full_batch: {np.median(eta_diffs):.4g}"
-            )
+            print(f"median eta difference, minibatch - full_batch: {np.median(eta_diffs):.4g}")
         if x_diffs.size and y_diffs.size:
-            print(
-                f"median strategy L1 difference: x={np.median(x_diffs):.4g}, y={np.median(y_diffs):.4g}"
-            )
+            print(f"median strategy L1 difference: x={np.median(x_diffs):.4g}, y={np.median(y_diffs):.4g}")
 
 
 def iter_tuning_configs(args: argparse.Namespace) -> Iterator[argparse.Namespace]:
@@ -315,19 +276,11 @@ def main() -> None:
     args = parse_args()
     rows = []
     with ExitStack() as stack:
-        result_writer = (
-            stack.enter_context(StreamingCsvWriter(args.csv))
-            if args.csv is not None
-            else None
-        )
+        result_writer = stack.enter_context(StreamingCsvWriter(args.csv)) if args.csv is not None else None
         history_writer = (
-            stack.enter_context(StreamingCsvWriter(args.history_csv))
-            if args.history_csv is not None
-            else None
+            stack.enter_context(StreamingCsvWriter(args.history_csv)) if args.history_csv is not None else None
         )
-        history_callback = (
-            history_writer.write_row if history_writer is not None else None
-        )
+        history_callback = history_writer.write_row if history_writer is not None else None
 
         for config_args in iter_tuning_configs(args):
             for K in args.K:
@@ -354,8 +307,7 @@ def main() -> None:
                                 f"kappa={config_args.entropy_kappa:g} "
                                 f"tau={config_args.smoothing_tau:g} "
                                 f"step={config_args.step_size:g} "
-                                f"K={K:>3} n={n:>3} rep={rep:>2} "
-                                + " | ".join(method_parts)
+                                f"K={K:>3} n={n:>3} rep={rep:>2} " + " | ".join(method_parts)
                             )
 
     print_summary(rows, args.methods)

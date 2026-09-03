@@ -95,21 +95,15 @@ def test_scalability_driver_accepts_stochastic_specific_regret_tolerance():
     args = base_args(["stochastic_full_batch"])
     args.stochastic_regret_tolerance = 1e-4
 
-    config = compare_scalability_approaches._stochastic_config(
-        args, K=2, seed=0, method="stochastic_full_batch"
-    )
-    row = compare_scalability_approaches.run_instance(
-        args, risk="msd", K=2, n=2, seed=0
-    )
+    config = compare_scalability_approaches._stochastic_config(args, K=2, seed=0, method="stochastic_full_batch")
+    row = compare_scalability_approaches.run_instance(args, risk="msd", K=2, n=2, seed=0)
 
     assert config.regret_tolerance == 1e-4
     assert row["epsilon"] == args.epsilon
     assert row["stochastic_regret_tolerance"] == 1e-4
 
 
-@pytest.mark.parametrize(
-    "flag", ["--stochastic-regret-tolerance", "--stochastic-epsilon"]
-)
+@pytest.mark.parametrize("flag", ["--stochastic-regret-tolerance", "--stochastic-epsilon"])
 def test_scalability_driver_parses_stochastic_tolerance_aliases(monkeypatch, flag):
     monkeypatch.setattr(sys, "argv", [str(SCRIPT), flag, "0.0001"])
 
@@ -125,9 +119,7 @@ def test_scalability_driver_records_best_certificate_iteration():
     args.max_iter = 0
     args.certify_every = 1
 
-    row = compare_scalability_approaches.run_instance(
-        args, risk="msd", K=2, n=2, seed=0
-    )
+    row = compare_scalability_approaches.run_instance(args, risk="msd", K=2, n=2, seed=0)
 
     assert row["stochastic_full_batch_best_certificate_iteration"] == 0
 
@@ -146,9 +138,7 @@ def test_scalability_driver_records_best_rejected_screen():
         },
     )
 
-    metrics = compare_scalability_approaches._support_result_metrics(
-        "screened_dual", result, elapsed_s=2.5, error=None
-    )
+    metrics = compare_scalability_approaches._support_result_metrics("screened_dual", result, elapsed_s=2.5, error=None)
 
     assert not metrics["screened_dual_success"]
     assert np.isnan(metrics["screened_dual_eta"])
@@ -157,10 +147,7 @@ def test_scalability_driver_records_best_rejected_screen():
     assert metrics["screened_dual_best_screen_success"]
     assert metrics["screened_dual_best_screen_violation"] == pytest.approx(1e-12)
     assert metrics["screened_dual_best_screen_candidate_index"] == 17
-    assert (
-        metrics["screened_dual_best_screen_message"]
-        == "Optimization terminated successfully"
-    )
+    assert metrics["screened_dual_best_screen_message"] == "Optimization terminated successfully"
 
 
 def test_scalability_driver_records_mcp_errors(monkeypatch):
@@ -171,9 +158,7 @@ def test_scalability_driver_records_mcp_errors(monkeypatch):
 
     monkeypatch.setattr(compare_scalability_approaches, "solve_msd_mcp", fail_mcp)
 
-    row = compare_scalability_approaches.run_instance(
-        args, risk="msd", K=2, n=2, seed=0
-    )
+    row = compare_scalability_approaches.run_instance(args, risk="msd", K=2, n=2, seed=0)
 
     assert not row["mcp_success"]
     assert not row["mcp_has_profile"]
@@ -201,9 +186,7 @@ def test_scalability_driver_default_rep_range_preserves_seed_formula(monkeypatch
     def fake_run_instance(args, risk, K, n, seed):
         return {"risk": risk, "K": K, "n": n, "seed": seed}
 
-    monkeypatch.setattr(
-        compare_scalability_approaches, "run_instance", fake_run_instance
-    )
+    monkeypatch.setattr(compare_scalability_approaches, "run_instance", fake_run_instance)
 
     rows = compare_scalability_approaches.run_experiment(args)
 
@@ -222,9 +205,7 @@ def test_scalability_driver_rep_shard_uses_absolute_rep_indices(monkeypatch):
     def fake_run_instance(args, risk, K, n, seed):
         return {"risk": risk, "K": K, "n": n, "seed": seed}
 
-    monkeypatch.setattr(
-        compare_scalability_approaches, "run_instance", fake_run_instance
-    )
+    monkeypatch.setattr(compare_scalability_approaches, "run_instance", fake_run_instance)
 
     rows = compare_scalability_approaches.run_experiment(args)
 
@@ -242,14 +223,10 @@ def test_scalability_driver_streams_valid_csv_rows(tmp_path, monkeypatch):
     def fake_run_instance(args, risk, K, n, seed):
         return {"risk": risk, "K": K, "n": n, "seed": seed, "status": "done"}
 
-    monkeypatch.setattr(
-        compare_scalability_approaches, "run_instance", fake_run_instance
-    )
+    monkeypatch.setattr(compare_scalability_approaches, "run_instance", fake_run_instance)
 
     with compare_scalability_approaches.StreamingCsvWriter(csv_path) as writer:
-        rows = compare_scalability_approaches.run_experiment(
-            args, row_callback=writer.write_row
-        )
+        rows = compare_scalability_approaches.run_experiment(args, row_callback=writer.write_row)
 
     with csv_path.open(newline="") as f:
         csv_rows = list(csv.DictReader(f))

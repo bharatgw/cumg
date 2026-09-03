@@ -173,9 +173,7 @@ def test_small_support_search_retains_rejected_screen_candidate_index(monkeypatc
             "T": T,
         }
 
-    monkeypatch.setattr(
-        small_support_module, "restricted_profile_gap_msd", rejected_screen
-    )
+    monkeypatch.setattr(small_support_module, "restricted_profile_gap_msd", rejected_screen)
     config = SupportSearchConfig(
         epsilon=0.01,
         epsilon_scr=0.01,
@@ -185,9 +183,7 @@ def test_small_support_search_retains_rejected_screen_candidate_index(monkeypatc
         seed=0,
     )
 
-    result = small_support_module.small_support_search_msd(
-        A, B, p, gamma=0.5, config=config
-    )
+    result = small_support_module.small_support_search_msd(A, B, p, gamma=0.5, config=config)
 
     assert not result.success
     assert result.metadata["best_screen"]["eta"] == pytest.approx(0.03)

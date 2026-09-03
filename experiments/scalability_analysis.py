@@ -327,17 +327,11 @@ def prepare_best_eta_history(history: pd.DataFrame) -> pd.DataFrame:
     _require_columns(history, required, label="stochastic history")
     work = history.copy()
     trajectory_columns = _history_trajectory_columns(work)
-    stage_order = [
-        column
-        for column in ("continuation_stage", "stage_iteration")
-        if column in work.columns
-    ]
+    stage_order = [column for column in ("continuation_stage", "stage_iteration") if column in work.columns]
     order = [*trajectory_columns, "iteration", *stage_order]
     work = work.sort_values(order, kind="stable").reset_index(drop=True)
     work["best_eta"] = work.groupby(trajectory_columns, dropna=False)["eta"].cummin()
-    return work.drop_duplicates([*trajectory_columns, "iteration"], keep="last").reset_index(
-        drop=True
-    )
+    return work.drop_duplicates([*trajectory_columns, "iteration"], keep="last").reset_index(drop=True)
 
 
 def prepare_eta_improvement(history: pd.DataFrame) -> pd.DataFrame:
@@ -394,6 +388,38 @@ def prepare_v3_history(history: pd.DataFrame, summary: pd.DataFrame) -> pd.DataF
     work = work.merge(initial_steps, on="shard", how="left", validate="many_to_one")
     if work["initial_step"].isna().any():
         raise ValueError("v3 history contains shards missing from the summary")
-    work = work.sort_values(["shard", "method", "iteration"]).reset_index(drop=True)
+    stage_order = [column for column in ("continuation_stage", "stage_iteration") if column in work.columns]
+    work = work.sort_values(["shard", "method", "iteration", *stage_order], kind="stable").reset_index(drop=True)
     work["best_eta_so_far"] = work.groupby(["shard", "method"], dropna=False)["eta"].cummin()
-    return work
+    return work.drop_duplicates(["shard", "method", "iteration"], keep="last").reset_index(drop=True)
+
+
+def prepare_v3_plot_history(history: pd.DataFrame, summary: pd.DataFrame) -> pd.DataFrame:
+    """Align v3 trajectories on a fixed cohort before pointwise aggregation.
+
+    A completed trajectory contributes its last running-best value at later
+    iterations reached by other shards in the same experiment group. This keeps
+    the replicate cohort fixed and prevents median running-best curves from
+    increasing merely because a shorter shard drops out.
+    """
+
+    work = prepare_v3_history(history, summary)
+    required = ["risk", "shard", "method", "initial_step", "iteration", "best_eta_so_far"]
+    _require_columns(work, required, label="v3 plot history")
+    cohort_columns = [column for column in ("risk", "K", "n", "method", "initial_step") if column in work.columns]
+
+    aligned: list[pd.DataFrame] = []
+    for cohort_values, cohort in work.groupby(cohort_columns, dropna=False, sort=False):
+        iterations = pd.Index(np.sort(cohort["iteration"].unique()), name="iteration")
+        for shard, trajectory in cohort.groupby("shard", dropna=False, sort=False):
+            values = trajectory.set_index("iteration")["best_eta_so_far"].reindex(iterations).ffill()
+            if values.isna().any():
+                raise ValueError(f"v3 shard {shard!r} starts after another shard in its cohort")
+            frame = values.rename("best_eta_so_far").reset_index()
+            frame["shard"] = shard
+            for column, value in zip(cohort_columns, cohort_values, strict=True):
+                frame[column] = value
+            aligned.append(frame)
+
+    columns = [*cohort_columns, "shard", "iteration", "best_eta_so_far"]
+    return pd.concat(aligned, ignore_index=True).loc[:, columns]

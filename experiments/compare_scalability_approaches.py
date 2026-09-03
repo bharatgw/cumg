@@ -107,9 +107,7 @@ def _solver_options(args: argparse.Namespace) -> dict[str, dict[str, Any]]:
     return {"pathampl": dict(path_options)}
 
 
-def _support_config(
-    args: argparse.Namespace, K: int, n: int, seed: int
-) -> SupportSearchConfig:
+def _support_config(args: argparse.Namespace, K: int, n: int, seed: int) -> SupportSearchConfig:
     kappa, tau = support_sizes(K, n)
     epsilon_scr = args.epsilon_scr
     if epsilon_scr is None:
@@ -130,9 +128,7 @@ def _support_config(
     )
 
 
-def _stochastic_config(
-    args: argparse.Namespace, K: int, seed: int, method: str
-) -> StochasticFOConfig:
+def _stochastic_config(args: argparse.Namespace, K: int, seed: int, method: str) -> StochasticFOConfig:
     if method == "stochastic_full_batch":
         batch_size = None
     elif method == "stochastic_minibatch":
@@ -173,9 +169,7 @@ def _profile_from_result(result) -> tuple[np.ndarray | None, np.ndarray | None]:
     return np.asarray(x, dtype=float), np.asarray(y, dtype=float)
 
 
-def _empty_method_metrics(
-    prefix: str, elapsed_s: float, error: str | None
-) -> dict[str, Any]:
+def _empty_method_metrics(prefix: str, elapsed_s: float, error: str | None) -> dict[str, Any]:
     return {
         f"{prefix}_success": False,
         f"{prefix}_time_s": elapsed_s,
@@ -223,9 +217,7 @@ def _mcp_result_metrics(
     out.update(_certificate_metrics(prefix, cert))
     out.update(
         {
-            f"{prefix}_success": bool(
-                np.isfinite(cert.get("eta", np.nan)) & (cert.get("eta", np.nan) <= eps)
-            ),
+            f"{prefix}_success": bool(np.isfinite(cert.get("eta", np.nan)) & (cert.get("eta", np.nan) <= eps)),
             f"{prefix}_has_profile": x is not None and y is not None,
             f"{prefix}_solver": getattr(result, "solver", None),
             f"{prefix}_error": error,
@@ -248,12 +240,8 @@ def _support_result_metrics(prefix: str, result, elapsed_s: float, error: str | 
         {
             f"{prefix}_best_screen_eta": float(best_screen.get("eta", np.nan)),
             f"{prefix}_best_screen_success": best_screen.get("success"),
-            f"{prefix}_best_screen_violation": float(
-                best_screen.get("violation", np.nan)
-            ),
-            f"{prefix}_best_screen_candidate_index": best_screen.get(
-                "candidate_index"
-            ),
+            f"{prefix}_best_screen_violation": float(best_screen.get("violation", np.nan)),
+            f"{prefix}_best_screen_candidate_index": best_screen.get("candidate_index"),
             f"{prefix}_best_screen_message": best_screen.get("message"),
         }
     )
@@ -280,32 +268,20 @@ def _support_result_metrics(prefix: str, result, elapsed_s: float, error: str | 
     return out
 
 
-def _stochastic_result_metrics(
-    prefix: str, result, elapsed_s: float, error: str | None
-):
+def _stochastic_result_metrics(prefix: str, result, elapsed_s: float, error: str | None):
     out = _empty_method_metrics(prefix, elapsed_s, error)
     cert = result.certificate if result is not None else {}
     x, y = _profile_from_result(result)
-    best_certificate = (
-        result.best_certificate
-        if result is not None and result.best_certificate is not None
-        else {}
-    )
+    best_certificate = result.best_certificate if result is not None and result.best_certificate is not None else {}
     out.update(_certificate_metrics(prefix, cert))
     out.update(
         {
             f"{prefix}_success": bool(result.success) if result is not None else False,
             f"{prefix}_has_profile": x is not None and y is not None,
-            f"{prefix}_residual_norm": (
-                float(result.residual_norm) if result is not None else np.nan
-            ),
-            f"{prefix}_objective": (
-                float(result.objective) if result is not None else np.nan
-            ),
+            f"{prefix}_residual_norm": (float(result.residual_norm) if result is not None else np.nan),
+            f"{prefix}_objective": (float(result.objective) if result is not None else np.nan),
             f"{prefix}_iterations": result.iterations if result is not None else None,
-            f"{prefix}_best_certificate_eta": float(
-                best_certificate.get("eta", np.nan)
-            ),
+            f"{prefix}_best_certificate_eta": float(best_certificate.get("eta", np.nan)),
             f"{prefix}_best_certificate_iteration": best_certificate.get("iteration"),
         }
     )
@@ -412,20 +388,14 @@ def _run_support_method(
     raise ValueError(f"Unsupported support method/risk pair: {method}/{risk}")
 
 
-def _run_stochastic_method(
-    method: str, risk: str, A, B, p, args: argparse.Namespace, seed: int
-):
+def _run_stochastic_method(method: str, risk: str, A, B, p, args: argparse.Namespace, seed: int):
     config = _stochastic_config(args, A.shape[0], seed, method)
     if risk == "msd":
         return solve_msd_stochastic_fo(A, B, p, gamma=args.gamma, config=config)
-    return solve_cvar_stochastic_fo(
-        A, B, p, gamma=args.gamma, alpha=args.alpha, config=config
-    )
+    return solve_cvar_stochastic_fo(A, B, p, gamma=args.gamma, alpha=args.alpha, config=config)
 
 
-def _run_method(
-    method: str, risk: str, A, B, p, args: argparse.Namespace, seed: int, support_config
-):
+def _run_method(method: str, risk: str, A, B, p, args: argparse.Namespace, seed: int, support_config):
     start = perf_counter()
     try:
         if method == "mcp":
@@ -453,9 +423,7 @@ def _run_method(
             result = _run_stochastic_method(method, risk, A, B, p, args, seed)
             return (
                 result,
-                _stochastic_result_metrics(
-                    method, result, perf_counter() - start, None
-                ),
+                _stochastic_result_metrics(method, result, perf_counter() - start, None),
                 None,
             )
         raise ValueError(f"Unknown method: {method}")
@@ -468,29 +436,18 @@ def _result_profile(result) -> tuple[np.ndarray | None, np.ndarray | None]:
     return _profile_from_result(result)
 
 
-def _add_pairwise_metrics(
-    row: dict[str, Any], results: dict[str, Any], methods: list[str]
-) -> None:
+def _add_pairwise_metrics(row: dict[str, Any], results: dict[str, Any], methods: list[str]) -> None:
     base = results.get("mcp")
     base_x, base_y = _result_profile(base)
     for method in methods:
         if method == "mcp":
             continue
-        row[f"eta_diff_{method}_minus_mcp"] = (
-            row[f"{method}_eta"] - row["mcp_eta"] if "mcp" in methods else np.nan
-        )
+        row[f"eta_diff_{method}_minus_mcp"] = row[f"{method}_eta"] - row["mcp_eta"] if "mcp" in methods else np.nan
         row[f"time_ratio_{method}_over_mcp"] = (
-            row[f"{method}_time_s"] / row["mcp_time_s"]
-            if "mcp" in methods and row["mcp_time_s"] > 0
-            else np.nan
+            row[f"{method}_time_s"] / row["mcp_time_s"] if "mcp" in methods and row["mcp_time_s"] > 0 else np.nan
         )
         x, y = _result_profile(results.get(method))
-        if (
-            base_x is not None
-            and base_y is not None
-            and x is not None
-            and y is not None
-        ):
+        if base_x is not None and base_y is not None and x is not None and y is not None:
             row[f"x_l1_{method}_minus_mcp"] = float(np.sum(np.abs(x - base_x)))
             row[f"y_l1_{method}_minus_mcp"] = float(np.sum(np.abs(y - base_y)))
         else:
@@ -498,22 +455,14 @@ def _add_pairwise_metrics(
             row[f"y_l1_{method}_minus_mcp"] = np.nan
 
     if "action_dual" in methods and "screened_dual" in methods:
-        row["eta_diff_action_dual_minus_screened_dual"] = (
-            row["action_dual_eta"] - row["screened_dual_eta"]
-        )
+        row["eta_diff_action_dual_minus_screened_dual"] = row["action_dual_eta"] - row["screened_dual_eta"]
         row["time_ratio_action_dual_over_screened_dual"] = (
-            row["action_dual_time_s"] / row["screened_dual_time_s"]
-            if row["screened_dual_time_s"] > 0
-            else np.nan
+            row["action_dual_time_s"] / row["screened_dual_time_s"] if row["screened_dual_time_s"] > 0 else np.nan
         )
     if "restricted_mcp" in methods and "action_dual" in methods:
-        row["eta_diff_restricted_mcp_minus_action_dual"] = (
-            row["restricted_mcp_eta"] - row["action_dual_eta"]
-        )
+        row["eta_diff_restricted_mcp_minus_action_dual"] = row["restricted_mcp_eta"] - row["action_dual_eta"]
         row["time_ratio_restricted_mcp_over_action_dual"] = (
-            row["restricted_mcp_time_s"] / row["action_dual_time_s"]
-            if row["action_dual_time_s"] > 0
-            else np.nan
+            row["restricted_mcp_time_s"] / row["action_dual_time_s"] if row["action_dual_time_s"] > 0 else np.nan
         )
     if "stochastic_minibatch" in methods and "stochastic_full_batch" in methods:
         row["eta_diff_stochastic_minibatch_minus_full_batch"] = (
@@ -526,9 +475,7 @@ def _add_pairwise_metrics(
         )
 
 
-def run_instance(
-    args: argparse.Namespace, risk: str, K: int, n: int, seed: int
-) -> dict[str, Any]:
+def run_instance(args: argparse.Namespace, risk: str, K: int, n: int, seed: int) -> dict[str, Any]:
     if risk not in RISKS:
         raise ValueError(f"risk must be one of {RISKS}; got {risk!r}.")
     A, B, p = simulate_random_payoffs(K=K, n=n, seed=seed, low=args.low, high=args.high)
@@ -567,9 +514,7 @@ def run_instance(
     }
     results: dict[str, Any] = {}
     for method in args.methods:
-        result, metrics, _ = _run_method(
-            method, risk, A, B, p, args, seed, support_config
-        )
+        result, metrics, _ = _run_method(method, risk, A, B, p, args, seed, support_config)
         results[method] = result
         row.update(metrics)
     _add_pairwise_metrics(row, results, args.methods)
@@ -610,10 +555,7 @@ def run_experiment(
                             f"time={row[f'{method}_time_s']:.3f}s"
                             for method in args.methods
                         ]
-                        print(
-                            f"{risk} K={K:>3} n={n:>3} rep={rep:>2} "
-                            + " | ".join(parts)
-                        )
+                        print(f"{risk} K={K:>3} n={n:>3} rep={rep:>2} " + " | ".join(parts))
     return rows
 
 
@@ -629,16 +571,12 @@ def print_summary(rows: list[dict[str, Any]], methods: list[str]) -> None:
         print(risk.upper())
         risk_rows = [row for row in rows if row["risk"] == risk]
         for method in methods:
-            success = np.array(
-                [bool(row[f"{method}_success"]) for row in risk_rows], dtype=float
-            )
+            success = np.array([bool(row[f"{method}_success"]) for row in risk_rows], dtype=float)
             times = _finite_values(risk_rows, f"{method}_time_s")
             etas = _finite_values(risk_rows, f"{method}_eta")
             time_text = f"{np.median(times):.4g}s" if times.size else "nan"
             eta_text = f"{np.median(etas):.4g}" if etas.size else "nan"
-            print(
-                f"  {method:>22}: success_rate={success.mean():.3f}, median_time={time_text}, median_eta={eta_text}"
-            )
+            print(f"  {method:>22}: success_rate={success.mean():.3f}, median_time={time_text}, median_eta={eta_text}")
 
 
 def write_csv(rows: list[dict[str, Any]], path: Path) -> None:
@@ -727,8 +665,7 @@ def parse_args() -> argparse.Namespace:
         args.fallback_solver = None
     args.path_options = DEFAULT_PATH_OPTIONS.copy()
     if args.stochastic_regret_tolerance is not None and (
-        not np.isfinite(args.stochastic_regret_tolerance)
-        or args.stochastic_regret_tolerance < 0
+        not np.isfinite(args.stochastic_regret_tolerance) or args.stochastic_regret_tolerance < 0
     ):
         parser.error("stochastic regret tolerance must be finite and nonnegative")
     try:

@@ -12,9 +12,7 @@ from pyomo.opt import SolverStatus, TerminationCondition
 
 # publically available at https://pages.cs.wisc.edu/~ferris/path/LICENSE
 # for academic use
-os.environ["PATH_LICENSE_STRING"] = (
-    "1259252040&Courtesy&&&USR&GEN2035&5_1_2026&1000&PATH&GEN&31_12_2035&0_0_0&6000&0_0"
-)
+os.environ["PATH_LICENSE_STRING"] = "1259252040&Courtesy&&&USR&GEN2035&5_1_2026&1000&PATH&GEN&31_12_2035&0_0_0&6000&0_0"
 
 
 def _solver_factory(name: str):
@@ -32,9 +30,7 @@ def solver_available(name: str) -> bool:
     return _solver_factory(name) is not None
 
 
-def available_solvers(
-    names: Iterable[str] = ("pathampl", "path", "ipopt")
-) -> dict[str, bool]:
+def available_solvers(names: Iterable[str] = ("pathampl", "path", "ipopt")) -> dict[str, bool]:
     """Check availability for common CUMG solver backends.
 
     The package can build MCP models without external binaries, but solving them
@@ -45,15 +41,11 @@ def available_solvers(
     return {name: solver_available(name) for name in names}
 
 
-def format_solver_availability(
-    names: Iterable[str] = ("pathampl", "path", "ipopt")
-) -> str:
+def format_solver_availability(names: Iterable[str] = ("pathampl", "path", "ipopt")) -> str:
     """Return a compact human-readable solver availability summary."""
 
     statuses = available_solvers(names)
-    parts = [
-        f"{name}={'available' if ok else 'missing'}" for name, ok in statuses.items()
-    ]
+    parts = [f"{name}={'available' if ok else 'missing'}" for name, ok in statuses.items()]
     return ", ".join(parts)
 
 

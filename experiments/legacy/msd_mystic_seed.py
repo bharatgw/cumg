@@ -29,8 +29,8 @@ def mcp_residual(v, A_list, B_list, p, gamma):
     n1, n2 = A_list[0].shape
     K = len(A_list)
     x, y, lam1, z1, lam2, z2, alpha1, alpha2 = unpack_vars(v, n1, n2, K)
-    Abar = sum(pk * Ak for pk, Ak in zip(p, A_list))
-    Bbar = sum(pk * Bk for pk, Bk in zip(p, B_list))
+    Abar = sum(pk * Ak for pk, Ak in zip(p, A_list, strict=True))
+    Bbar = sum(pk * Bk for pk, Bk in zip(p, B_list, strict=True))
     V1 = Abar.copy()
     for k in range(K):
         V1 += lam1[k] * (A_list[k] - Abar)
@@ -86,7 +86,6 @@ def run_mystic_seed(A_list, B_list, p, gamma, maxiter=2000, popsize=80, seed=13)
     except Exception as e:
         raise RuntimeError("mystic is required for this function") from e
     n1, n2 = A_list[0].shape
-    K = len(A_list)
     lb, ub = _bounds(A_list, B_list, p, gamma)
     dim = lb.size
     rng = np.random.default_rng(seed)
@@ -99,7 +98,7 @@ def run_mystic_seed(A_list, B_list, p, gamma, maxiter=2000, popsize=80, seed=13)
     sol = diffev2(
         cost,
         x0=x0,
-        bounds=list(zip(lb, ub)),
+        bounds=list(zip(lb, ub, strict=True)),
         maxiter=maxiter,
         popsize=popsize,
         ftol=1e-10,

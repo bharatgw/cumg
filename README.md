@@ -73,9 +73,10 @@ baseline on the same game seeds.*
 - **The stochastic variants track each other closely here.** Full-batch and
   minibatch each certify 260/320 CVaR and 231/320 MSD instances under the common
   threshold. In the largest displayed cell, both certify 20/20 instances, with
-  median runtimes of roughly 31--33 seconds for CVaR and 0.23 seconds for MSD. However,
-  this is a result of the intialised uniform action profile being an epsilon-equilibrium
-  at the chosen epsilon due to the strong concentration in the uniform game.
+  median runtimes of roughly 31--33 seconds for CVaR and 0.23 seconds for MSD.
+  This primarily reflects the initialized uniform action profile already being
+  an epsilon-equilibrium at the chosen tolerance because payoffs concentrate in
+  these random games.
 - **The random-game design has a strong concentration effect.** The uniform
   profile is already certified on 253/320 CVaR and 231/320 MSD instances and on
   every `K=500` instance. This is expected with high probability given the proof
