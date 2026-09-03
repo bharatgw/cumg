@@ -145,19 +145,12 @@ METHOD_TIME_LIMIT_SECONDS=172800 VERSION=capped_48h_v1 \
   ./experiments/run_cvar_scalability_capped_resume.sh
 ```
 
-## Notebook Merge
+## Notebook Analysis
 
-Copy or sync the CSV shards back into the repo, then merge them in the analysis
-notebook:
-
-```python
-from pathlib import Path
-
-import pandas as pd
-
-result_dir = Path("experiments/results/remote")
-df = pd.concat(
-    [pd.read_csv(path) for path in sorted(result_dir.glob("*.csv"))],
-    ignore_index=True,
-)
-```
+Copy or sync the result directories back into the same paths, then run
+`experiments/mcpAlgoAnalysis.ipynb` from the top. The notebook uses the
+validated helpers in `experiments/scalability_analysis.py`; it reads the final
+capped CVaR aggregate from
+`results/remote/cvar_scalability/capped_24h_v1/capped_method_results.csv` and
+checks method coverage before plotting. Do not concatenate every CSV beneath
+`results/remote/`: that tree contains different campaigns and schemas.

@@ -13,6 +13,14 @@ uniform_profile_baseline = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(uniform_profile_baseline)
 
 
+def test_default_outputs_use_curated_uniform_directory():
+    expected = ROOT / "experiments" / "results" / "uniform"
+
+    assert uniform_profile_baseline.DEFAULT_RESULT_DIR == expected
+    assert uniform_profile_baseline.DEFAULT_CSV == expected / "uniform_profile_baseline.csv"
+    assert uniform_profile_baseline.DEFAULT_SUMMARY_CSV == expected / "uniform_profile_baseline_summary.csv"
+
+
 def base_args():
     return argparse.Namespace(
         risk=["msd"],

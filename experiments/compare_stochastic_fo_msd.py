@@ -1,4 +1,7 @@
-"""Compare MSD stochastic first-order scalability settings."""
+"""Legacy MSD-only stochastic comparison retained for experiment provenance.
+
+Use ``compare_stochastic_fo.py`` for new MSD or CVaR runs.
+"""
 
 from __future__ import annotations
 

@@ -6,20 +6,25 @@ This directory preserves the research workflows and committed outputs used while
 
 - `mcpSolvers.ipynb`: main notebook for MCP formulations, small-support experiments, and plots.
 - `mcpAlgoAnalysis.ipynb`: analysis and plotting notebook for scalability outputs.
+- `compare_scalability_approaches.py`: general MSD/CVaR scalability runner.
 - `compare_small_support_msd.py`: script comparing MSD small-support search backends.
 - `compare_stochastic_fo.py`: script comparing full-batch and mini-batch MSD or CVaR stochastic first-order runs.
+- `compare_stochastic_fo_msd.py`: superseded MSD-only predecessor retained for
+  provenance; use `compare_stochastic_fo.py` for new runs.
+- `capped_scalability_resume.py` and
+  `run_cvar_scalability_capped_resume.sh`: planner and shell runner for the
+  completed per-method capped CVaR campaign.
+- `uniform_profile_baseline.py`: reproducible uniform-profile baseline generator.
+- `scalability_analysis.py`: validated loading, reshaping, and summarization used by `mcpAlgoAnalysis.ipynb`.
 - `legacy/`: original standalone scripts kept as provenance for the packaged implementation.
 - `results/`: committed CSV outputs from experiments.
 
 ## Result Files
 
-- `results/prisonersDilemmaMSD.csv`: MSD prisoner-dilemma style experiment output.
-- `results/scalabilityExperimentMSD.csv`: early MSD scalability experiment output.
-- `results/scalabilityExperimentMSDv2.csv`: current MSD scalability experiment output.
-- `results/scalabilityExperimentcVaR.csv`: CVaR scalability experiment output.
-- `results/partial/`: partial or checkpointed experiment outputs.
-
-These CSV files are intentionally tracked in git for reproducibility, but they are not package data and are not installed with `cumg`.
+See [`results/README.md`](results/README.md) for the authoritative, legacy, and
+incomplete datasets and the exact inputs used by the analysis notebook. Curated
+CSV outputs are intentionally tracked for reproducibility, but they are not
+package data and are not installed with `cumg`.
 
 ## Reproducing
 

@@ -29,8 +29,9 @@ from compare_scalability_approaches import (  # noqa: E402
 
 from cumg.small_support import full_cvar_regret, full_msd_regret  # noqa: E402
 
-DEFAULT_CSV = ROOT / "experiments" / "results" / "uniform_profile_baseline.csv"
-DEFAULT_SUMMARY_CSV = ROOT / "experiments" / "results" / "uniform_profile_baseline_summary.csv"
+DEFAULT_RESULT_DIR = ROOT / "experiments" / "results" / "uniform"
+DEFAULT_CSV = DEFAULT_RESULT_DIR / "uniform_profile_baseline.csv"
+DEFAULT_SUMMARY_CSV = DEFAULT_RESULT_DIR / "uniform_profile_baseline_summary.csv"
 
 
 def run_instance(args: argparse.Namespace, risk: str, K: int, n: int, rep: int) -> dict[str, Any]:
