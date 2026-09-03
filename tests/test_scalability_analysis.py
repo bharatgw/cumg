@@ -144,6 +144,33 @@ def test_eta_history_uses_shard_to_separate_repeated_configs() -> None:
     assert rerun["best_eta"].tolist() == [10.0, 9.0]
 
 
+def test_eta_history_joins_continuation_stages_within_shard() -> None:
+    history = pd.DataFrame(
+        {
+            "shard": ["run"] * 4,
+            "risk": ["cvar"] * 4,
+            "K": [250] * 4,
+            "n": [20] * 4,
+            "method": ["full_batch"] * 4,
+            "seed": [7] * 4,
+            "entropy_kappa": [0.1, 0.1, 0.03, 0.03],
+            "smoothing_tau": [0.02, 0.02, 0.01, 0.01],
+            "step_size": [10.0] * 4,
+            "continuation_stage": [0, 0, 1, 1],
+            "stage_iteration": [0, 1, 0, 1],
+            "iteration": [0, 1, 1, 2],
+            "eta": [10.0, 8.0, 9.0, 6.0],
+        }
+    )
+
+    prepared = analysis.prepare_eta_improvement(history)
+
+    assert prepared["continuation_stage"].tolist() == [0, 1, 1]
+    assert prepared["best_eta"].tolist() == [10.0, 8.0, 6.0]
+    assert prepared["initial_eta"].tolist() == [10.0, 10.0, 10.0]
+    assert prepared["eta_improvement_pct"].tolist() == pytest.approx([0.0, 20.0, 40.0])
+
+
 def test_prepare_v3_history_is_safe_to_rerun() -> None:
     summary = pd.DataFrame({"shard": ["a", "b"], "step_size": [10.0, 20.0]})
     history = pd.DataFrame(

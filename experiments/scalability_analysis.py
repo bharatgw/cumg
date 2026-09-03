@@ -36,6 +36,19 @@ TRAJECTORY_COLUMNS = (
 )
 
 
+def _history_trajectory_columns(history: pd.DataFrame) -> list[str]:
+    """Return columns identifying one optimization trajectory.
+
+    Loaded shard names identify independent runs even when continuation changes
+    kappa, tau, or step size between stages. For data without shard provenance,
+    retain the fixed-hyperparameter grouping used by legacy histories.
+    """
+
+    if "shard" in history.columns:
+        return ["shard", "method"]
+    return list(TRAJECTORY_COLUMNS)
+
+
 def _require_columns(frame: pd.DataFrame, columns: Iterable[str], *, label: str) -> None:
     missing = sorted(set(columns) - set(frame.columns))
     if missing:
@@ -303,27 +316,35 @@ def summarize_scalability(long: pd.DataFrame) -> pd.DataFrame:
 
 
 def prepare_best_eta_history(history: pd.DataFrame) -> pd.DataFrame:
-    """Compute the running best eta separately for every search trajectory."""
+    """Compute running best eta across all stages of each search trajectory.
+
+    Consecutive continuation stages share their boundary iteration. The returned
+    frame retains the later-stage row at that iteration after carrying forward
+    the best eta from the preceding stage.
+    """
 
     required = [*TRAJECTORY_COLUMNS, "iteration", "eta"]
     _require_columns(history, required, label="stochastic history")
     work = history.copy()
-    trajectory_columns = [*TRAJECTORY_COLUMNS]
-    if "shard" in work.columns:
-        trajectory_columns.insert(0, "shard")
-    order = [*trajectory_columns, "iteration"]
-    work = work.sort_values(order).reset_index(drop=True)
+    trajectory_columns = _history_trajectory_columns(work)
+    stage_order = [
+        column
+        for column in ("continuation_stage", "stage_iteration")
+        if column in work.columns
+    ]
+    order = [*trajectory_columns, "iteration", *stage_order]
+    work = work.sort_values(order, kind="stable").reset_index(drop=True)
     work["best_eta"] = work.groupby(trajectory_columns, dropna=False)["eta"].cummin()
-    return work
+    return work.drop_duplicates([*trajectory_columns, "iteration"], keep="last").reset_index(
+        drop=True
+    )
 
 
 def prepare_eta_improvement(history: pd.DataFrame) -> pd.DataFrame:
     """Add percentage improvement relative to each trajectory's initial eta."""
 
     work = prepare_best_eta_history(history)
-    trajectory_columns = [*TRAJECTORY_COLUMNS]
-    if "shard" in work.columns:
-        trajectory_columns.insert(0, "shard")
+    trajectory_columns = _history_trajectory_columns(work)
     grouped = work.groupby(trajectory_columns, dropna=False)["eta"]
     work["initial_eta"] = grouped.transform("first")
     denominator = work["initial_eta"].where(work["initial_eta"].ne(0))
