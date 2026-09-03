@@ -198,7 +198,7 @@ export PYTHON_BIN RESULT_DIR LOG_DIR REPS SEED_BASE
 export GAMMA ALPHA EPSILON EPSILON_SCR STOCHASTIC_REGRET_TOLERANCE
 export MAX_CANDIDATES N_SCREEN_STARTS N_SUPPORT_STARTS
 export SCREEN_MAXITER SUPPORT_MAXITER MAX_ITER CERTIFY_EVERY
-export SOLVER FALLBACK_SOLVER METHOD_TIME_LIMIT_SECONDS RESUME_TOOL
+export SOLVER FALLBACK_SOLVER METHOD_TIME_LIMIT_SECONDS RETRY_ERRORS RESUME_TOOL
 
 xargs -n 6 -P "$WORKERS" bash -c '
   set -euo pipefail
@@ -223,9 +223,15 @@ xargs -n 6 -P "$WORKERS" bash -c '
     echo "SKIP complete: $method_stem"
     exit 0
   fi
+  retry_error_marker=0
   if [[ -s "$status_marker" ]]; then
-    echo "SKIP status recorded: $method_stem"
-    exit 0
+    if (( RETRY_ERRORS != 0 )) \
+      && grep -Eq "\"status\"[[:space:]]*:[[:space:]]*\"error\"" "$status_marker"; then
+      retry_error_marker=1
+    else
+      echo "SKIP status recorded: $method_stem"
+      exit 0
+    fi
   fi
   if ! mkdir "$lock_dir" 2>/dev/null; then
     echo "SKIP locked: $method_stem" >&2
@@ -236,9 +242,23 @@ xargs -n 6 -P "$WORKERS" bash -c '
   attempt=0
   while :; do
     log=$(printf "%s/%s_attempt%03d.log" "$LOG_DIR" "$method_stem" "$attempt")
-    [[ -e "$log" ]] || break
+    status_archive=$(printf "%s/%s_status_before_attempt%03d.json" \
+      "$LOG_DIR" "$method_stem" "$attempt")
+    [[ -e "$log" || -e "$status_archive" ]] || break
     attempt=$((attempt + 1))
   done
+
+  if (( retry_error_marker != 0 )); then
+    # The lock makes archiving and retrying atomic with respect to other runners.
+    # Timeout markers are deliberately never retried by this switch.
+    if [[ ! -s "$status_marker" ]] \
+      || ! grep -Eq "\"status\"[[:space:]]*:[[:space:]]*\"error\"" "$status_marker"; then
+      echo "SKIP retry marker changed: $method_stem" >&2
+      exit 0
+    fi
+    mv "$status_marker" "$status_archive"
+    echo "RETRY error: $method_stem (previous marker: $status_archive)"
+  fi
 
   command=(
     "$PYTHON_BIN" experiments/compare_scalability_approaches.py

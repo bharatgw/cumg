@@ -143,6 +143,14 @@ def test_timeout_marker_is_collected_as_censored_result(tmp_path):
     assert rows[0]["seed"] == "6001123"
     assert rows[0]["status_message"] == "cap reached"
 
+    args.retry_errors = True
+    assert capped_scalability_resume.write_manifest(args) == {
+        "total": 1,
+        "scheduled": 0,
+        "timeout": 1,
+    }
+    assert args.manifest.read_text() == ""
+
 
 def test_completed_capped_shard_takes_precedence_over_legacy(tmp_path):
     args = grid_args(tmp_path, ["restricted_mcp"])
@@ -170,3 +178,34 @@ def test_completed_capped_shard_takes_precedence_over_legacy(tmp_path):
     assert record["source"] == "capped_run"
     assert record["success"] is True
     assert record["eta"] == "0.009"
+
+
+def test_error_marker_is_scheduled_only_when_retry_errors_is_enabled(tmp_path):
+    args = grid_args(tmp_path, ["action_dual"])
+    args.legacy_dir.mkdir(parents=True)
+    record_args = argparse.Namespace(
+        result_dir=args.result_dir,
+        risk="cvar",
+        K=500,
+        n=10,
+        rep=0,
+        method="action_dual",
+        seed_base=123,
+        status="error",
+        elapsed_s=12,
+        time_limit_seconds=86_400,
+        exit_code=1,
+        message="test error",
+    )
+    capped_scalability_resume.record_status(record_args)
+
+    counts = capped_scalability_resume.write_manifest(args)
+
+    assert counts == {"total": 1, "scheduled": 0, "error": 1}
+    assert args.manifest.read_text() == ""
+
+    args.retry_errors = True
+    counts = capped_scalability_resume.write_manifest(args)
+
+    assert counts == {"total": 1, "scheduled": 1, "error": 1}
+    assert args.manifest.read_text() == "cvar\t500\t10\t0\taction_dual\t6001123\n"
