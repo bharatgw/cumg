@@ -56,6 +56,7 @@ def _method_config(args: argparse.Namespace, K: int, seed: int, method: str) -> 
         record_every=optional_positive_int(args.record_every),
         certify_every=optional_positive_int(args.certify_every),
         regret_tolerance=args.regret_tolerance,
+        n_random_starts=0,  # Preserve this legacy script's single-start experiment.
     )
 
 

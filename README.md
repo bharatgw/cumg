@@ -24,20 +24,27 @@ to compare the computational approaches.
 
 ## Scalability experiments
 
-The committed scalability experiments compare seven methods on random two-player
-games with `n ∈ {5, 10, 20, 50}` actions per player and
-`K ∈ {5, 10, 30, 100, 250, 500}` payoff samples. Each method uses the same 20
-game seeds within a `(risk, K, n)` cell. Payoffs are sampled independently from
+The committed scalability grid covers random two-player games with
+`n ∈ {5, 10, 20, 50}` actions per player and
+`K ∈ {5, 10, 30, 100, 250, 500}` payoff samples. The figures compare five
+algorithms and a uniform-profile baseline on the same 20 game seeds within
+each displayed `(risk, K, n)` cell. Payoffs are sampled independently from
 `Uniform[0, 1]`, with `gamma=0.5`, `alpha=0.5` for CVaR, and target
 `epsilon=0.01`. The figures omit `K=5` and `K=10` for legibility.
 
 The final CVaR campaign imposes a 24-hour wall-clock cap separately on every
 method and replicate. Timeout runtimes are therefore right-censored at 86,400
-seconds. The six existing MSD methods use the original uncapped campaign.
+seconds. The four plotted MCP and support-search methods use the original
+uncapped MSD campaign.
 Sampled QPTAS checks up to 1,000 distinct joint profiles with
 `kappa=ceil(sqrt(n))`, using all K samples for each best-response LP; it has a
 24-hour per-run cap for both risks. Runtime is the duration of the configured
-attempt, whether or not it produced a certificate.
+attempt, whether or not it produced a certificate. The uniform baseline's
+runtime measures full-regret certification of the fixed uniform profile,
+excluding game generation. It comes from the separately timed baseline runs.
+The stochastic full-batch and minibatch methods are omitted from both figures
+for now; their saved histories do not isolate the iteration-zero certificate's
+runtime.
 
 ### Runtime scaling
 
@@ -56,13 +63,13 @@ times.*
 
 *Success uses the same finite-certificate threshold and cross markers as the
 runtime figure. The methods' native success flags do not determine the plotted
-counts; in particular, the stochastic runs used a stricter stopping tolerance.
-The uniform profile is included as a diagnostic baseline on the same game seeds.*
+counts. The uniform profile is included as a diagnostic baseline on the same
+game seeds in both figures.*
 
 ### Main takeaways
 
-- **CVaR equilibrium solves take longer.** Within the displayed grid, 126 of
-  2,240 configured CVaR method runs reached the 24-hour cap: 75 action-dual and
+- **CVaR equilibrium solves take longer.** Among the five plotted algorithms,
+  126 of 1,600 CVaR runs reached the 24-hour cap: 75 action-dual and
   51 screened-dual runs. No other method recorded a timeout.
 - **Exact methods do not converge with scale.** Direct MCP
   and restricted MCP often terminate much sooner than the sparse-support
@@ -73,13 +80,9 @@ The uniform profile is included as a diagnostic baseline on the same game seeds.
   displayed MSD instances, but its median runtime across those instances is
   about 300 seconds. Under CVaR its certificate rate is 245/320 and it accounts
   for most capped runs.
-- **The stochastic variants track each other closely here.** Full-batch and
-  minibatch each certify 260/320 CVaR and 231/320 MSD instances under the common
-  threshold. In the largest displayed cell, both certify 20/20 instances, with
-  median runtimes of roughly 31--33 seconds for CVaR and 0.23 seconds for MSD.
-  This primarily reflects the initialized uniform action profile already being
-  an epsilon-equilibrium at the chosen tolerance because payoffs concentrate in
-  these random games.
+- **Uniform-profile certification is inexpensive on this grid.** At
+  `K=500, n=50`, it certifies all 20 games for each risk, with median recorded
+  certification times of about 0.031 seconds for MSD and 0.047 seconds for CVaR.
 - **Sampled QPTAS finds certificates within a small search budget.** It certifies
   256/320 displayed MSD instances and 204/320 CVaR instances within 1,000 sampled
   profiles per instance. Unsuccessful runs exhaust that budget.

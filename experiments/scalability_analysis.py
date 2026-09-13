@@ -44,9 +44,12 @@ def _history_trajectory_columns(history: pd.DataFrame) -> list[str]:
     retain the fixed-hyperparameter grouping used by legacy histories.
     """
 
-    if "shard" in history.columns:
-        return ["shard", "method"]
-    return list(TRAJECTORY_COLUMNS)
+    columns = ["shard", "method"] if "shard" in history.columns else list(TRAJECTORY_COLUMNS)
+    if "start_index" in history.columns:
+        # Restart indices are local to a continuation stage. Do not deduplicate
+        # or compute a trajectory's improvements across independent starts.
+        columns.extend(column for column in ("continuation_stage", "start_index") if column in history.columns)
+    return columns
 
 
 def _require_columns(frame: pd.DataFrame, columns: Iterable[str], *, label: str) -> None:

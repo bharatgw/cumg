@@ -16,6 +16,21 @@ campaigns. Similar directory names do not imply interchangeable specifications.
 - `stochastic/continuation_shards/v2/` and `v3/`: stochastic continuation pilot
   summaries and histories used by the notebook's tuning diagnostics.
 
+## Inputs used by the README figures
+
+`generate_readme_figures.py` uses the same MSD and capped CVaR sources for MCP,
+screened dual, action dual, and restricted MCP, plus
+`remote/qptas_scalability/sampled_1000_v1/capped_method_results.csv` for sampled
+QPTAS. Both figures also include `uniform/uniform_profile_baseline.csv`, matched
+to the same 20 seeds in each displayed cell. Its `uniform_time_s` column measures
+full-regret certification of the fixed uniform profile, excluding game generation.
+It is a separate baseline measurement, not a recovered FO checkpoint time.
+
+Stochastic full-batch and minibatch results are currently omitted from the README
+figures. Their original data and notebook analysis are retained. Both figures
+use finite certificates at most 0.01 to count successes, and cross markers for
+cells with fewer than five successful seeds.
+
 ## Supporting and legacy outputs
 
 - `remote/cvar_scalability/v1/`: uncapped source campaign used by the capped

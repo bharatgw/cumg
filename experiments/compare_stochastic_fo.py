@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from collections.abc import Callable, Iterator
 from contextlib import ExitStack
@@ -123,6 +124,7 @@ def _method_config(
         record_every=optional_positive_int(args.record_every),
         certify_every=optional_positive_int(args.certify_every),
         regret_tolerance=args.regret_tolerance,
+        n_random_starts=getattr(args, "n_random_starts", 4),
         stagnation_window=optional_positive_int(getattr(args, "stagnation_window", None)),
         stagnation_rtol=getattr(args, "stagnation_rtol", 0.0),
         stagnation_atol=getattr(args, "stagnation_atol", 0.0),
@@ -257,6 +259,21 @@ def _method_metrics(
         f"{prefix}_best_objective": float(best_iterate.get("objective", np.nan)),
         f"{prefix}_best_certificate_eta": float(best_certificate.get("eta", np.nan)),
         f"{prefix}_best_certificate_iteration": certificate_iteration,
+        f"{prefix}_selected_start": getattr(result, "selected_start", 0),
+        f"{prefix}_starts_attempted": (
+            sum(len(getattr(run["result"], "start_summaries", [])) or 1 for run in stage_runs)
+            if stage_runs
+            else len(getattr(result, "start_summaries", [])) or 1
+        ),
+        f"{prefix}_start_summaries": json.dumps(
+            [
+                {**start, "continuation_stage": run["stage"]}
+                for run in stage_runs
+                for start in getattr(run["result"], "start_summaries", [])
+            ]
+            if stage_runs
+            else getattr(result, "start_summaries", [])
+        ),
         f"{prefix}_selected_stage": selected_stage,
         f"{prefix}_selected_kappa": selected_kappa,
         f"{prefix}_selected_tau": selected_tau,
@@ -327,6 +344,11 @@ def _history_rows(
             "continuation_stage": stage_run["stage"],
             "stage_iteration": checkpoint["iteration"],
             "iteration": stage_run["iteration_offset"] + checkpoint["iteration"],
+            **(
+                {"start_index": checkpoint["start_index"], "start_iteration": checkpoint["start_iteration"]}
+                if "start_index" in checkpoint
+                else {}
+            ),
             "selected_stage": bool(stage_run.get("selected", False)),
             "stage_improvement": stage_run["stage_improvement"],
             "stage_relative_improvement": stage_run["stage_relative_improvement"],
@@ -368,6 +390,7 @@ def run_instance(
         "minibatch_size": stochastic_minibatch_size(args, K),
         "step_decay": args.step_decay,
         "regret_tolerance": args.regret_tolerance,
+        "n_random_starts": getattr(args, "n_random_starts", 4),
         "record_every": args.record_every,
         "certify_every": args.certify_every,
         "continuation": getattr(args, "continuation_kappa", None) is not None,
@@ -492,6 +515,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--stagnation-rtol", type=float, default=0.0)
     parser.add_argument("--stagnation-atol", type=float, default=0.0)
     parser.add_argument("--regret-tolerance", type=float, default=1e-2)
+    parser.add_argument("--n-random-starts", type=int, default=4)
     parser.add_argument(
         "--methods",
         nargs="+",
@@ -504,6 +528,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--history-csv", type=Path, default=None)
     parser.add_argument("--quiet", action="store_true")
     args = parser.parse_args()
+    if args.n_random_starts < 0:
+        parser.error("n-random-starts must be nonnegative")
     if args.history_csv is not None and args.record_every <= 0:
         parser.error("--history-csv requires a positive --record-every")
     try:

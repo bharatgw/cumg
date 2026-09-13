@@ -22,6 +22,8 @@ ALPHA="${ALPHA:-0.5}"
 EPSILON="${EPSILON:-0.01}"
 EPSILON_SCR="${EPSILON_SCR:-}"
 STOCHASTIC_REGRET_TOLERANCE="${STOCHASTIC_REGRET_TOLERANCE:-0.001}"
+STOCHASTIC_N_RANDOM_STARTS="${STOCHASTIC_N_RANDOM_STARTS:-4}"
+PAYOFF_MODEL="${PAYOFF_MODEL:-uniform}"
 MAX_CANDIDATES="${MAX_CANDIDATES:-1000}"
 N_SCREEN_STARTS="${N_SCREEN_STARTS:-3}"
 N_SUPPORT_STARTS="${N_SUPPORT_STARTS:-20}"
@@ -29,6 +31,9 @@ SCREEN_MAXITER="${SCREEN_MAXITER:-1000}"
 SUPPORT_MAXITER="${SUPPORT_MAXITER:-1000}"
 MAX_ITER="${MAX_ITER:-1000}"
 CERTIFY_EVERY="${CERTIFY_EVERY:-100}"
+STAGNATION_WINDOW="${STAGNATION_WINDOW:-0}"
+STAGNATION_RTOL="${STAGNATION_RTOL:-0}"
+STAGNATION_ATOL="${STAGNATION_ATOL:-0}"
 
 SOLVER="${SOLVER:-pathampl}"
 FALLBACK_SOLVER="${FALLBACK_SOLVER:-none}"
@@ -74,6 +79,8 @@ require_positive_integer REPS "$REPS"
 require_positive_integer METHOD_TIME_LIMIT_SECONDS "$METHOD_TIME_LIMIT_SECONDS"
 require_nonnegative_integer RETRY_ERRORS "$RETRY_ERRORS"
 require_nonnegative_integer DRY_RUN "$DRY_RUN"
+require_nonnegative_integer STOCHASTIC_N_RANDOM_STARTS "$STOCHASTIC_N_RANDOM_STARTS"
+require_nonnegative_integer STAGNATION_WINDOW "$STAGNATION_WINDOW"
 
 if [[ ! -d "$LEGACY_RESULT_DIR" ]]; then
   echo "Legacy result directory not found: $LEGACY_RESULT_DIR" >&2
@@ -125,6 +132,19 @@ run_config="$(printf '%s\n' \
 if [[ -n "$EPSILON_SCR" ]]; then
   run_config+=$'\n'"EPSILON_SCR=$EPSILON_SCR"
 fi
+if [[ "$PAYOFF_MODEL" != "uniform" ]]; then
+  run_config+=$'\n'"PAYOFF_MODEL=$PAYOFF_MODEL"
+fi
+# Old configurations used zero random starts. Preserve that resume mode, while
+# refusing to mix new restart runs into the old single-start campaign.
+if [[ "$METHODS" == *stochastic_* ]] && (( STOCHASTIC_N_RANDOM_STARTS > 0 )); then
+  run_config+=$'\n'"STOCHASTIC_N_RANDOM_STARTS=$STOCHASTIC_N_RANDOM_STARTS"
+fi
+if [[ "$METHODS" == *stochastic_* ]] && (( STAGNATION_WINDOW > 0 )); then
+  run_config+=$'\n'"STAGNATION_WINDOW=$STAGNATION_WINDOW"
+  run_config+=$'\n'"STAGNATION_RTOL=$STAGNATION_RTOL"
+  run_config+=$'\n'"STAGNATION_ATOL=$STAGNATION_ATOL"
+fi
 
 if [[ -f "$CONFIG_FILE" ]]; then
   if [[ "$(cat "$CONFIG_FILE")" != "$run_config" ]]; then
@@ -151,6 +171,8 @@ common_plan_args=(
   --seed-base "$SEED_BASE"
   --methods "${method_args[@]}"
   --time-limit-seconds "$METHOD_TIME_LIMIT_SECONDS"
+  --stochastic-n-random-starts "$STOCHASTIC_N_RANDOM_STARTS"
+  --payoff-model "$PAYOFF_MODEL"
 )
 
 plan_command=("$PYTHON_BIN" "$RESUME_TOOL" plan "${common_plan_args[@]}" --manifest "$MANIFEST")
@@ -196,8 +218,11 @@ export XLA_FLAGS="${XLA_FLAGS:---xla_cpu_multi_thread_eigen=false intra_op_paral
 
 export PYTHON_BIN RESULT_DIR LOG_DIR REPS SEED_BASE
 export GAMMA ALPHA EPSILON EPSILON_SCR STOCHASTIC_REGRET_TOLERANCE
+export STOCHASTIC_N_RANDOM_STARTS
+export PAYOFF_MODEL
 export MAX_CANDIDATES N_SCREEN_STARTS N_SUPPORT_STARTS
 export SCREEN_MAXITER SUPPORT_MAXITER MAX_ITER CERTIFY_EVERY
+export STAGNATION_WINDOW STAGNATION_RTOL STAGNATION_ATOL
 export SOLVER FALLBACK_SOLVER METHOD_TIME_LIMIT_SECONDS RETRY_ERRORS RESUME_TOOL
 
 xargs -n 6 -P "$WORKERS" bash -c '
@@ -273,6 +298,8 @@ xargs -n 6 -P "$WORKERS" bash -c '
     --alpha "$ALPHA"
     --epsilon "$EPSILON"
     --stochastic-regret-tolerance "$STOCHASTIC_REGRET_TOLERANCE"
+    --stochastic-n-random-starts "$STOCHASTIC_N_RANDOM_STARTS"
+    --payoff-model "$PAYOFF_MODEL"
     --max-candidates "$MAX_CANDIDATES"
     --n-screen-starts "$N_SCREEN_STARTS"
     --n-support-starts "$N_SUPPORT_STARTS"
@@ -280,6 +307,9 @@ xargs -n 6 -P "$WORKERS" bash -c '
     --support-maxiter "$SUPPORT_MAXITER"
     --max-iter "$MAX_ITER"
     --certify-every "$CERTIFY_EVERY"
+    --stagnation-window "$STAGNATION_WINDOW"
+    --stagnation-rtol "$STAGNATION_RTOL"
+    --stagnation-atol "$STAGNATION_ATOL"
     --solver "$SOLVER"
     --fallback-solver "$FALLBACK_SOLVER"
     --methods "$method"
@@ -289,8 +319,8 @@ xargs -n 6 -P "$WORKERS" bash -c '
   if [[ -n "$EPSILON_SCR" ]]; then
     command+=(--epsilon-scr "$EPSILON_SCR")
   fi
-  if [[ "$method" == "qptas" ]]; then
-    # LP failures must produce retryable error markers, not completed CSV shards.
+  if [[ "$method" == "qptas" || "$method" == stochastic_* ]]; then
+    # Numerical failures must produce retryable error markers, not completed CSV shards.
     command+=(--fail-on-error)
   fi
 

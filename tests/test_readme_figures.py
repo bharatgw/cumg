@@ -106,7 +106,7 @@ def test_loader_adds_qptas_for_both_risks_and_checks_seed_cohorts(monkeypatch, c
                 "alpha": 0.5 if risk == "cvar" else np.nan,
             }
             for risk in figures.RISK_GRID
-            for method in figures.METHODS
+            for method in (*figures.sa.SCALABILITY_METHODS, "qptas")
             for rep in range(20)
         ]
     )
@@ -135,6 +135,8 @@ def test_loader_adds_qptas_for_both_risks_and_checks_seed_cohorts(monkeypatch, c
             figures.load_scalability_data()
     else:
         long = figures.load_scalability_data()
-        assert len(long) == 20 * 2 * len(figures.CERTIFICATE_METHODS)
+        assert len(long) == 20 * 2 * len(figures.METHODS)
+        assert set(long["method"]) == set(figures.METHODS)
+        assert long.loc[long["method"].eq("uniform"), "time_s"].eq(0.01).all()
         assert long.loc[long["method"].eq("qptas")].groupby("risk").size().to_dict() == {"msd": 20, "cvar": 20}
         assert figures._summarize_certified_runs(long)["successes"].eq(20).all()

@@ -144,6 +144,29 @@ def test_eta_history_uses_shard_to_separate_repeated_configs() -> None:
     assert rerun["best_eta"].tolist() == [10.0, 9.0]
 
 
+def test_eta_history_preserves_distinct_restarts_at_the_same_iteration() -> None:
+    history = pd.DataFrame(
+        {
+            "shard": ["a"] * 4,
+            "method": ["full_batch"] * 4,
+            "risk": ["msd"] * 4,
+            "K": [2] * 4,
+            "n": [2] * 4,
+            "seed": [0] * 4,
+            "entropy_kappa": [0.1] * 4,
+            "smoothing_tau": [0.02] * 4,
+            "step_size": [1.0] * 4,
+            "continuation_stage": [0, 0, 1, 1],
+            "start_index": [0, 1, 0, 1],
+            "iteration": [0, 0, 0, 0],
+            "eta": [0.1, 0.2, 0.3, 0.4],
+        }
+    )
+    prepared = analysis.prepare_best_eta_history(history)
+    assert len(prepared) == 4
+    assert prepared["best_eta"].tolist() == pytest.approx([0.1, 0.2, 0.3, 0.4])
+
+
 def test_eta_history_joins_continuation_stages_within_shard() -> None:
     history = pd.DataFrame(
         {

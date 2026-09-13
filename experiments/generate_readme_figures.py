@@ -29,16 +29,13 @@ EPSILON = 1e-2
 MIN_SUCCESSFUL_SEEDS = 5
 CVaR_CAP_SECONDS = 24 * 60 * 60
 
-METHODS = (*sa.SCALABILITY_METHODS, "qptas")
-CERTIFICATE_METHODS = (*METHODS, "uniform")
+METHODS = ("mcp", "screened_dual", "action_dual", "restricted_mcp", "qptas", "uniform")
 CERTIFICATE_PLOT_ORDER = (
     "uniform",
     "mcp",
     "screened_dual",
     "action_dual",
     "restricted_mcp",
-    "stochastic_minibatch",
-    "stochastic_full_batch",
     "qptas",
 )
 METHOD_LABELS = {
@@ -46,8 +43,6 @@ METHOD_LABELS = {
     "screened_dual": "Screened dual",
     "action_dual": "Action dual",
     "restricted_mcp": "Restricted MCP",
-    "stochastic_full_batch": "Stochastic full batch",
-    "stochastic_minibatch": "Stochastic minibatch",
     "qptas": "QPTAS (sampled)",
     "uniform": "Uniform baseline",
 }
@@ -56,8 +51,6 @@ METHOD_COLORS = {
     "screened_dual": "#E69F00",
     "action_dual": "#009E73",
     "restricted_mcp": "#D55E00",
-    "stochastic_full_batch": "#CC79A7",
-    "stochastic_minibatch": "#56B4E9",
     "qptas": "#7B3294",
     "uniform": "#666666",
 }
@@ -66,8 +59,6 @@ METHOD_LINESTYLES = {
     "screened_dual": "-",
     "action_dual": "-",
     "restricted_mcp": "-",
-    "stochastic_full_batch": "--",
-    "stochastic_minibatch": ":",
     "qptas": "-.",
     "uniform": "--",
 }
@@ -76,15 +67,13 @@ METHOD_MARKERS = {
     "screened_dual": "o",
     "action_dual": "o",
     "restricted_mcp": "o",
-    "stochastic_full_batch": "^",
-    "stochastic_minibatch": "s",
     "qptas": "D",
     "uniform": "v",
 }
 
 
 def load_scalability_data() -> pd.DataFrame:
-    """Load matched legacy, capped CVaR, and sampled QPTAS results."""
+    """Load five algorithms and measured uniform certificates on matched seeds."""
 
     msd_wide = sa.load_csv_shards(RESULTS_DIR / "remote/msd_cvar_part_scalability", "*K*_n*.csv")
     msd_wide = msd_wide.loc[msd_wide["risk"].eq("msd")].copy()
@@ -101,7 +90,13 @@ def load_scalability_data() -> pd.DataFrame:
 
     uniform = pd.read_csv(RESULTS_DIR / "uniform/uniform_profile_baseline.csv")
     long = sa.append_uniform_baseline(long, uniform)
-    long = long.loc[long["risk"].isin(RISK_GRID) & long["n"].isin(N_GRID) & long["K"].isin(K_GRID)].copy()
+    long = long.loc[
+        long["risk"].isin(RISK_GRID) & long["n"].isin(N_GRID) & long["K"].isin(K_GRID) & long["method"].isin(METHODS)
+    ].copy()
+
+    baseline_times = pd.to_numeric(long.loc[long["method"].eq("uniform"), "time_s"], errors="coerce")
+    if not np.isfinite(baseline_times).all() or not baseline_times.gt(0).all():
+        raise ValueError("Uniform baseline must have finite positive certification runtimes")
 
     primary = long.loc[long["method"].isin(METHODS)]
     cells = primary.groupby(["risk", "n", "K", "method"], dropna=False)
@@ -187,7 +182,7 @@ def _plot_method_points(ax, points: pd.DataFrame, method: str, value_column: str
 
 
 def plot_runtime(long: pd.DataFrame, output_path: Path) -> None:
-    """Plot median observed-or-capped runtime with interquartile bands."""
+    """Plot attempt runtimes and uniform certification times with IQR bands."""
 
     summary = _summarize_certified_runs(long.loc[long["method"].isin(METHODS)])
     fig, axes = plt.subplots(2, 4, figsize=(15.5, 7.2), sharex=True, sharey=True)
@@ -241,7 +236,7 @@ def plot_runtime(long: pd.DataFrame, output_path: Path) -> None:
 def plot_certificate_rate(long: pd.DataFrame, output_path: Path) -> None:
     """Plot the share of runs with a finite exact-regret certificate at eta <= 1e-2."""
 
-    summary = _summarize_certified_runs(long.loc[long["method"].isin(CERTIFICATE_METHODS)])
+    summary = _summarize_certified_runs(long.loc[long["method"].isin(METHODS)])
     fig, axes = plt.subplots(2, 4, figsize=(15.5, 7.2), sharex=True, sharey=True)
     _style_axes(axes)
 
@@ -265,7 +260,7 @@ def plot_certificate_rate(long: pd.DataFrame, output_path: Path) -> None:
                 ax.set_ylabel(r"Share with exact-regret $\eta \leq 10^{-2}$", fontsize=9)
 
     fig.legend(
-        handles=_method_legend(CERTIFICATE_METHODS),
+        handles=_method_legend(METHODS),
         loc="lower center",
         bbox_to_anchor=(0.5, -0.01),
         ncol=3,

@@ -7,6 +7,9 @@ This directory preserves the research workflows and committed outputs used while
 - `mcpSolvers.ipynb`: main notebook for MCP formulations, small-support experiments, and plots.
 - `mcpAlgoAnalysis.ipynb`: analysis and plotting notebook for scalability outputs.
 - `compare_scalability_approaches.py`: general MSD/CVaR scalability runner.
+- `run_population_qptas_fo_remote.sh`: QPTAS and both FO modes with fixed
+  Beta/uniform populations per payoff entry, K=1000/2000/4000 and n=50.
+  See [`POPULATION_QPTAS_FO.md`](POPULATION_QPTAS_FO.md) for setup and outputs.
 - `compare_small_support_msd.py`: script comparing MSD small-support search backends.
 - `compare_stochastic_fo.py`: script comparing full-batch and mini-batch MSD or CVaR stochastic first-order runs.
 - `compare_stochastic_fo_msd.py`: superseded MSD-only predecessor retained for
@@ -38,6 +41,48 @@ package data and are not installed with `cumg`.
 3. Open the notebooks from this directory or adapt the code into scripts.
 4. Write new intermediate outputs to `experiments/tmp/` or `experiments/scratch/`; those paths are ignored.
 5. Promote only curated, documented CSV outputs into `experiments/results/`.
+
+### Stochastic FO Starts and Stopping
+
+Both MSD and CVaR FO solvers, in full-batch and mini-batch mode, start from
+uniform strategies unless `x0`/`y0` are supplied. They return immediately when
+a certificate satisfies `eta <= regret_tolerance`. Only an unsuccessful start
+triggers a random restart, up to four by default. Each random profile draws
+the players' strategies independently from Dirichlet(1, ..., 1). The seed
+controls both these draws and the mini-batch streams. If all starts fail, the
+solver returns the profile with the lowest certified regret.
+
+Set `StochasticFOConfig(n_random_starts=0)` for the original single-start
+behavior. In `compare_stochastic_fo.py`, use `--n-random-starts`; in
+`compare_scalability_approaches.py`, use `--stochastic-n-random-starts`.
+Both default to four additional starts.
+
+The core configuration still defaults to `regret_tolerance=0.001` and
+`certify_every=None`. To check the initial profile and then every 100 iterations
+against a 0.01 target, use:
+
+```python
+config = StochasticFOConfig(
+    regret_tolerance=0.01,
+    certify_every=100,
+    n_random_starts=4,
+)
+```
+
+Use `certify_every=1` to check after every update. With certification disabled,
+the solver checks regret only at the end of each start. Each start has its own
+`max_iter` budget and fresh step-size decay. Optional stagnation stopping checks
+whether the running-best certified regret improves by less than
+`max(stagnation_atol, stagnation_rtol * abs(reference_eta))` over the configured
+iteration window. Stagnation is disabled by default and requires periodic
+certification. Reaching stagnation or the iteration limit without meeting the
+regret target permits another start; it does not count as success.
+
+Results record each attempted start's initial profile, seed, certificate,
+runtime, iteration count, and stopping reason in `start_summaries`.
+`selected_start` identifies the returned profile. Total iterations and runtime
+include all attempted starts; history rows also carry `start_index` and
+`start_iteration` so independent trajectories can be distinguished.
 
 ### Stochastic Hyperparameter Pilot
 
@@ -99,12 +144,18 @@ python experiments/compare_stochastic_fo.py \
 
 Each stage warm-starts from the preceding stage's best certified profile and
 restarts the step-size decay counter. CVaR also carries forward both threshold
-variables. A stage stops when exact eta meets the target or fails to improve by
-the requested absolute or relative amount over the stagnation window.
-Continuation itself stops when a completed stage contributes less than the
-configured stage-level improvement. The summary reports the lowest exact eta
+variables for its first attempt. Each stage can also use the conditional random
+restarts described above, with fresh CVaR thresholds for each random profile.
+A successful certificate stops the entire continuation immediately. Otherwise,
+a stage finishes after its allowed starts end at stagnation or the iteration
+limit. Continuation itself stops when a completed stage contributes less than
+the configured stage-level improvement. The summary reports the lowest exact eta
 found across all stages and its selected stage, kappa, tau, and step size.
 History rows include local and cumulative iterations plus stage settings and
 termination reasons.
+
+The historical `run_stochastic_continuation.sh` runner and the superseded
+`compare_stochastic_fo_msd.py` explicitly use zero random restarts to preserve
+the original experiment protocol. Use `compare_stochastic_fo.py` for new runs.
 
 Large third-party solver distributions, PDFs, and archives were removed from the publishable tree. Local copies, if present, live under `.local/removed_artifacts/` and are ignored by git.

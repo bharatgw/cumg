@@ -16,6 +16,7 @@ ALPHA="${ALPHA:-0.5}"
 EPSILON="${EPSILON:-0.01}"
 EPSILON_SCR="${EPSILON_SCR:-}"
 STOCHASTIC_REGRET_TOLERANCE="${STOCHASTIC_REGRET_TOLERANCE:-0.001}"
+STOCHASTIC_N_RANDOM_STARTS="${STOCHASTIC_N_RANDOM_STARTS:-4}"
 MAX_CANDIDATES="${MAX_CANDIDATES:-1000}"
 N_SCREEN_STARTS="${N_SCREEN_STARTS:-3}"
 N_SUPPORT_STARTS="${N_SUPPORT_STARTS:-20}"
@@ -60,6 +61,7 @@ require_nonnegative_integer() {
 require_positive_integer WORKERS "$WORKERS"
 require_positive_integer REPS "$REPS"
 require_nonnegative_integer RUN_TIMEOUT_SECONDS "$RUN_TIMEOUT_SECONDS"
+require_nonnegative_integer STOCHASTIC_N_RANDOM_STARTS "$STOCHASTIC_N_RANDOM_STARTS"
 
 if ! command -v "$PYTHON_BIN" >/dev/null 2>&1; then
   echo "Python executable not found: $PYTHON_BIN" >&2
@@ -98,6 +100,9 @@ run_config="$(printf '%s\n' \
   "RUN_TIMEOUT_SECONDS=$RUN_TIMEOUT_SECONDS")"
 if [[ -n "$EPSILON_SCR" ]]; then
   run_config+=$'\n'"EPSILON_SCR=$EPSILON_SCR"
+fi
+if [[ "$METHODS" == *stochastic_* ]] && (( STOCHASTIC_N_RANDOM_STARTS > 0 )); then
+  run_config+=$'\n'"STOCHASTIC_N_RANDOM_STARTS=$STOCHASTIC_N_RANDOM_STARTS"
 fi
 
 if [[ -f "$CONFIG_FILE" ]]; then
@@ -141,6 +146,7 @@ export XLA_FLAGS="${XLA_FLAGS:---xla_cpu_multi_thread_eigen=false intra_op_paral
 
 export PYTHON_BIN RESULT_DIR LOG_DIR REPS SEED_BASE METHODS
 export GAMMA ALPHA EPSILON EPSILON_SCR STOCHASTIC_REGRET_TOLERANCE
+export STOCHASTIC_N_RANDOM_STARTS
 export MAX_CANDIDATES N_SCREEN_STARTS N_SUPPORT_STARTS
 export SCREEN_MAXITER SUPPORT_MAXITER MAX_ITER CERTIFY_EVERY
 export SOLVER FALLBACK_SOLVER RUN_TIMEOUT_SECONDS DRY_RUN
@@ -216,6 +222,7 @@ done | xargs -n 4 -P "$WORKERS" bash -c '
     --alpha "$ALPHA"
     --epsilon "$EPSILON"
     --stochastic-regret-tolerance "$STOCHASTIC_REGRET_TOLERANCE"
+    --stochastic-n-random-starts "$STOCHASTIC_N_RANDOM_STARTS"
     --max-candidates "$MAX_CANDIDATES"
     --n-screen-starts "$N_SCREEN_STARTS"
     --n-support-starts "$N_SUPPORT_STARTS"

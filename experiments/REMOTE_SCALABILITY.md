@@ -145,6 +145,28 @@ METHOD_TIME_LIMIT_SECONDS=172800 VERSION=capped_48h_v1 \
   ./experiments/run_cvar_scalability_capped_resume.sh
 ```
 
+## FO Restarts
+
+For new FO experiments, both scalability shell runners default to
+`STOCHASTIC_N_RANDOM_STARTS=4`: uniform first, then up to four random starts
+only if needed. The first certificate at or below
+`STOCHASTIC_REGRET_TOLERANCE` stops the method. The existing defaults remain
+0.001 for this threshold and 100 iterations between certification checks.
+To use the 0.01 target with restarts, choose a fresh result version, for example:
+
+```bash
+VERSION=fo_restarts_eps001_v1 METHODS="stochastic_full_batch stochastic_minibatch" \
+  STOCHASTIC_REGRET_TOLERANCE=0.01 STOCHASTIC_N_RANDOM_STARTS=4 \
+  ./experiments/run_cvar_scalability_capped_resume.sh
+```
+
+The wall-clock cap covers all starts together. Each start has its own
+`MAX_ITER` budget. Restart settings are recorded in run configurations and
+result CSVs. Old uniform-only FO rows are not reused for a restart campaign;
+to resume an existing single-start campaign, set
+`STOCHASTIC_N_RANDOM_STARTS=0` and retain its original threshold and version.
+QPTAS-only runs are unaffected by the FO restart setting.
+
 ## Notebook Analysis
 
 Copy or sync the result directories back into the same paths, then run

@@ -74,6 +74,7 @@ done | xargs -n 4 -P "$WORKERS" bash -c '
     --continuation-stage-rtol 0.005 \
     --continuation-stage-atol 0.00001 \
     --regret-tolerance 0.001 \
+    --n-random-starts 0 \
     --csv "$summary" \
     --history-csv "$history" \
     >> "$log" 2>&1

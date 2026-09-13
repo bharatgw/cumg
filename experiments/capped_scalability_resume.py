@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from compare_scalability_approaches import DEFAULT_METHODS, METHODS, experiment_seed
+from compare_scalability_approaches import DEFAULT_METHODS, METHODS, PAYOFF_MODELS, experiment_seed
 
 DEFAULT_K_GRID = (5, 10, 30, 100, 250, 500)
 DEFAULT_N_GRID = (5, 10, 20, 50)
@@ -28,6 +28,10 @@ DEFAULT_SEED_BASE = 123
 DEFAULT_TIME_LIMIT_SECONDS = 24 * 60 * 60
 
 COMMON_RESULT_FIELDS = (
+    "payoff_model",
+    "payoff_populations",
+    "payoff_population_ids",
+    "payoff_numpy_version",
     "gamma",
     "alpha",
     "epsilon",
@@ -50,6 +54,10 @@ COMMON_RESULT_FIELDS = (
     "stochastic_record_every",
     "stochastic_certify_every",
     "stochastic_regret_tolerance",
+    "stochastic_n_random_starts",
+    "stochastic_stagnation_window",
+    "stochastic_stagnation_rtol",
+    "stochastic_stagnation_atol",
 )
 
 METHOD_RESULT_FIELDS = (
@@ -79,6 +87,9 @@ METHOD_RESULT_FIELDS = (
     "best_response_solves",
     "sampling_seed",
     "termination_reason",
+    "starts_attempted",
+    "selected_start",
+    "start_summaries",
 )
 
 OUTPUT_FIELDS = (
@@ -203,6 +214,18 @@ def _result_record(
     row: dict[str, str],
     source: str,
 ) -> dict[str, Any] | None:
+    requested_model = getattr(args, "payoff_model", None)
+    if requested_model is not None and (row.get("payoff_model") or "uniform") != requested_model:
+        if source == "legacy_reused":
+            return None
+        raise ValueError("Payoff model differs from saved results; use a new result directory.")
+    requested_starts = getattr(args, "stochastic_n_random_starts", None)
+    if task.method.startswith("stochastic_") and requested_starts is not None:
+        recorded_starts = _finite_float(row.get("stochastic_n_random_starts")) or 0
+        if recorded_starts != requested_starts:
+            if source == "legacy_reused":
+                return None
+            raise ValueError("FO restart configuration differs from saved results; use a new result directory.")
     observed_time = _finite_float(row.get(f"{task.method}_time_s"))
     if observed_time is None:
         return None
@@ -361,6 +384,8 @@ def _add_grid_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--seed-base", type=int, default=DEFAULT_SEED_BASE)
     parser.add_argument("--methods", nargs="+", choices=METHODS, default=list(DEFAULT_METHODS))
     parser.add_argument("--time-limit-seconds", type=int, default=DEFAULT_TIME_LIMIT_SECONDS)
+    parser.add_argument("--stochastic-n-random-starts", type=int, default=None)
+    parser.add_argument("--payoff-model", choices=PAYOFF_MODELS, default=None)
 
 
 def parse_args() -> argparse.Namespace:
@@ -393,6 +418,8 @@ def parse_args() -> argparse.Namespace:
     record_parser.add_argument("--message", default="")
 
     args = parser.parse_args()
+    if getattr(args, "stochastic_n_random_starts", None) is not None and args.stochastic_n_random_starts < 0:
+        parser.error("stochastic-n-random-starts must be nonnegative")
     if getattr(args, "time_limit_seconds", 1) <= 0:
         parser.error("time-limit-seconds must be positive")
     if getattr(args, "reps", 1) <= 0:

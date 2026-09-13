@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import sys
 from collections.abc import Callable
 from pathlib import Path
@@ -51,6 +52,15 @@ DEFAULT_METHODS = (
 )
 METHODS = (*DEFAULT_METHODS, "qptas")
 RISKS = ("msd", "cvar")
+PAYOFF_MODELS = ("uniform", "cell_beta_uniform_v1")
+# Versioned catalogue: IDs 0..3 are Beta(a, b); ID 4 is Uniform[0, 1].
+PAYOFF_POPULATIONS = (
+    {"family": "beta", "a": 1, "b": 4},
+    {"family": "beta", "a": 2, "b": 3},
+    {"family": "beta", "a": 3, "b": 2},
+    {"family": "beta", "a": 4, "b": 1},
+    {"family": "uniform", "low": 0, "high": 1},
+)
 DEFAULT_PATH_OPTIONS = {
     "major_iteration_limit": 50_000_000,
     "minor_iteration_limit": 50_000_000,
@@ -74,6 +84,39 @@ def simulate_random_payoffs(
     B = rng.uniform(low, high, size=(K, n, n))
     p = np.ones(K, dtype=float) / K
     return A, B, p
+
+
+def simulate_population_payoffs(
+    K: int,
+    n: int,
+    seed: int,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Draw a game with a fixed, uniformly chosen population per payoff entry.
+
+    Return A, B, empirical probabilities, and population IDs shaped (2, n, n).
+    Mapping and sampling use separate RNG streams; the two players' maps and
+    samples are independent. For a fixed seed/n, increasing K preserves the map
+    and the previously drawn samples. All five populations have support [0, 1].
+    """
+    for name, value in (("K", K), ("n", n)):
+        if isinstance(value, (bool, np.bool_)) or not isinstance(value, (int, np.integer)) or value <= 0:
+            raise ValueError(f"{name} must be a positive integer.")
+    population_count = len(PAYOFF_POPULATIONS)
+    streams = np.random.SeedSequence(seed).spawn(1 + 2 * population_count)
+    population_ids = np.random.default_rng(streams[0]).integers(0, population_count, size=(2, n, n))
+    payoffs = []
+    for player in range(2):
+        samples = np.empty((K, n, n), dtype=float)
+        for population, specification in enumerate(PAYOFF_POPULATIONS):
+            mask = population_ids[player] == population
+            rng = np.random.default_rng(streams[1 + player * population_count + population])
+            size = (K, int(mask.sum()))
+            if specification["family"] == "beta":
+                samples[:, mask] = rng.beta(specification["a"], specification["b"], size=size)
+            else:
+                samples[:, mask] = rng.uniform(specification["low"], specification["high"], size=size)
+        payoffs.append(samples)
+    return payoffs[0], payoffs[1], np.full(K, 1.0 / K), population_ids
 
 
 def experiment_seed(risk: str, K: int, n: int, rep: int, seed_base: int) -> int:
@@ -151,6 +194,10 @@ def _stochastic_config(args: argparse.Namespace, K: int, seed: int, method: str)
         record_every=optional_positive_int(args.record_every),
         certify_every=optional_positive_int(args.certify_every),
         regret_tolerance=stochastic_regret_tolerance(args),
+        n_random_starts=getattr(args, "stochastic_n_random_starts", 4),
+        stagnation_window=optional_positive_int(getattr(args, "stagnation_window", None)),
+        stagnation_rtol=getattr(args, "stagnation_rtol", 0.0),
+        stagnation_atol=getattr(args, "stagnation_atol", 0.0),
     )
 
 
@@ -208,6 +255,15 @@ def _empty_method_metrics(prefix: str, elapsed_s: float, error: str | None) -> d
                 "qptas_best_response_solves": None,
                 "qptas_sampling_seed": None,
                 "qptas_termination_reason": "error" if error is not None else None,
+            }
+        )
+    if prefix in ("stochastic_full_batch", "stochastic_minibatch"):
+        out.update(
+            {
+                f"{prefix}_starts_attempted": 0,
+                f"{prefix}_selected_start": None,
+                f"{prefix}_start_summaries": "[]",
+                f"{prefix}_termination_reason": "error" if error is not None else None,
             }
         )
     return out
@@ -300,6 +356,10 @@ def _stochastic_result_metrics(prefix: str, result, elapsed_s: float, error: str
             f"{prefix}_iterations": result.iterations if result is not None else None,
             f"{prefix}_best_certificate_eta": float(best_certificate.get("eta", np.nan)),
             f"{prefix}_best_certificate_iteration": best_certificate.get("iteration"),
+            f"{prefix}_starts_attempted": (len(result.start_summaries) or 1) if result is not None else 0,
+            f"{prefix}_selected_start": result.selected_start if result is not None else None,
+            f"{prefix}_start_summaries": json.dumps(result.start_summaries) if result is not None else "[]",
+            f"{prefix}_termination_reason": result.termination_reason if result is not None else "error",
         }
     )
     return out
@@ -531,7 +591,16 @@ def _add_pairwise_metrics(row: dict[str, Any], results: dict[str, Any], methods:
 def run_instance(args: argparse.Namespace, risk: str, K: int, n: int, seed: int) -> dict[str, Any]:
     if risk not in RISKS:
         raise ValueError(f"risk must be one of {RISKS}; got {risk!r}.")
-    A, B, p = simulate_random_payoffs(K=K, n=n, seed=seed, low=args.low, high=args.high)
+    payoff_model = getattr(args, "payoff_model", "uniform")
+    if payoff_model == "uniform":
+        A, B, p = simulate_random_payoffs(K=K, n=n, seed=seed, low=args.low, high=args.high)
+        population_ids = None
+    elif payoff_model == "cell_beta_uniform_v1":
+        if args.low != 0.0 or args.high != 1.0:
+            raise ValueError("cell_beta_uniform_v1 requires low=0 and high=1.")
+        A, B, p, population_ids = simulate_population_payoffs(K=K, n=n, seed=seed)
+    else:
+        raise ValueError(f"Unknown payoff model: {payoff_model}")
     kappa, tau = support_sizes(K, n)
     support_config = _support_config(args, K, n, seed)
     row: dict[str, Any] = {
@@ -542,6 +611,10 @@ def run_instance(args: argparse.Namespace, risk: str, K: int, n: int, seed: int)
         "gamma": args.gamma,
         "alpha": args.alpha if risk == "cvar" else np.nan,
         "epsilon": args.epsilon,
+        "payoff_model": payoff_model,
+        "payoff_populations": json.dumps(PAYOFF_POPULATIONS) if population_ids is not None else "",
+        "payoff_population_ids": json.dumps(population_ids.tolist()) if population_ids is not None else "",
+        "payoff_numpy_version": np.__version__,
         "epsilon_scr": support_config.epsilon_scr,
         "support_kappa": kappa,
         "support_tau": tau,
@@ -563,6 +636,10 @@ def run_instance(args: argparse.Namespace, risk: str, K: int, n: int, seed: int)
         "stochastic_record_every": args.record_every,
         "stochastic_certify_every": args.certify_every,
         "stochastic_regret_tolerance": stochastic_regret_tolerance(args),
+        "stochastic_n_random_starts": getattr(args, "stochastic_n_random_starts", 4),
+        "stochastic_stagnation_window": optional_positive_int(getattr(args, "stagnation_window", None)),
+        "stochastic_stagnation_rtol": getattr(args, "stagnation_rtol", 0.0),
+        "stochastic_stagnation_atol": getattr(args, "stagnation_atol", 0.0),
         "methods": ",".join(args.methods),
     }
     results: dict[str, Any] = {}
@@ -692,6 +769,13 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--epsilon-scr", type=float, default=None)
     parser.add_argument(
+        "--stochastic-n-random-starts",
+        "--n-random-starts",
+        type=int,
+        default=4,
+        help="Additional FO starts after failure (0 keeps the single uniform start).",
+    )
+    parser.add_argument(
         "--max-candidates",
         type=int,
         default=100,
@@ -711,11 +795,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--gradient-clip-norm", type=float, default=None)
     parser.add_argument("--record-every", type=int, default=0)
     parser.add_argument("--certify-every", type=int, default=0)
+    parser.add_argument("--stagnation-window", type=int, default=None, help="FO stagnation window; 0 disables it.")
+    parser.add_argument("--stagnation-rtol", type=float, default=0.0)
+    parser.add_argument("--stagnation-atol", type=float, default=0.0)
     parser.add_argument("--methods", nargs="+", choices=METHODS, default=list(DEFAULT_METHODS))
     parser.add_argument("--solver", default="pathampl")
     parser.add_argument("--fallback-solver", default="ipopt")
     parser.add_argument("--low", type=float, default=0.0)
     parser.add_argument("--high", type=float, default=1.0)
+    parser.add_argument("--payoff-model", choices=PAYOFF_MODELS, default="uniform")
     parser.add_argument("--csv", type=Path, default=None)
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument(
@@ -727,6 +815,10 @@ def parse_args() -> argparse.Namespace:
     if args.fallback_solver is not None and args.fallback_solver.lower() == "none":
         args.fallback_solver = None
     args.path_options = DEFAULT_PATH_OPTIONS.copy()
+    if args.payoff_model != "uniform" and (args.low != 0.0 or args.high != 1.0):
+        parser.error("cell_beta_uniform_v1 requires --low 0 and --high 1")
+    if args.stochastic_n_random_starts < 0:
+        parser.error("stochastic-n-random-starts must be nonnegative")
     if args.stochastic_regret_tolerance is not None and (
         not np.isfinite(args.stochastic_regret_tolerance) or args.stochastic_regret_tolerance < 0
     ):

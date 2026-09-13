@@ -104,7 +104,9 @@ def test_stochastic_fo_tuning_grid_and_history_rows(risk):
     history_rows = []
     row = compare_stochastic_fo.run_instance(configs[0], risk, K=2, n=2, seed=0, history_callback=history_rows.append)
     assert row["full_batch_best_certificate_iteration"] == 0
-    assert len(history_rows) == 1
+    assert len(history_rows) == 5
+    assert {r["start_index"] for r in history_rows} == set(range(5))
+    assert all(r["start_iteration"] == 0 for r in history_rows)
     assert history_rows[0]["risk"] == risk
     if risk == "cvar":
         assert history_rows[0]["alpha"] == 1.0
