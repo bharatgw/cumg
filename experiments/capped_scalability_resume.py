@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from compare_scalability_approaches import METHODS, experiment_seed
+from compare_scalability_approaches import DEFAULT_METHODS, METHODS, experiment_seed
 
 DEFAULT_K_GRID = (5, 10, 30, 100, 250, 500)
 DEFAULT_N_GRID = (5, 10, 20, 50)
@@ -74,6 +74,11 @@ METHOD_RESULT_FIELDS = (
     "iterations",
     "best_certificate_eta",
     "best_certificate_iteration",
+    "profiles_checked",
+    "total_profiles",
+    "best_response_solves",
+    "sampling_seed",
+    "termination_reason",
 )
 
 OUTPUT_FIELDS = (
@@ -354,7 +359,7 @@ def _add_grid_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--n", type=int, nargs="+", default=list(DEFAULT_N_GRID))
     parser.add_argument("--reps", type=int, default=DEFAULT_REPS)
     parser.add_argument("--seed-base", type=int, default=DEFAULT_SEED_BASE)
-    parser.add_argument("--methods", nargs="+", choices=METHODS, default=list(METHODS))
+    parser.add_argument("--methods", nargs="+", choices=METHODS, default=list(DEFAULT_METHODS))
     parser.add_argument("--time-limit-seconds", type=int, default=DEFAULT_TIME_LIMIT_SECONDS)
 
 

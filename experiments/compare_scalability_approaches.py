@@ -20,8 +20,10 @@ if str(SRC) not in sys.path:
 from cumg import (  # noqa: E402
     StochasticFOConfig,
     solve_cvar_mcp,
+    solve_cvar_qptas,
     solve_cvar_stochastic_fo,
     solve_msd_mcp,
+    solve_msd_qptas,
     solve_msd_stochastic_fo,
 )
 from cumg.results import SupportSearchConfig  # noqa: E402
@@ -39,7 +41,7 @@ from cumg.small_support import (  # noqa: E402
     supported_profile_gap_msd_mcp,
 )
 
-METHODS = (
+DEFAULT_METHODS = (
     "mcp",
     "screened_dual",
     "action_dual",
@@ -47,6 +49,7 @@ METHODS = (
     "stochastic_full_batch",
     "stochastic_minibatch",
 )
+METHODS = (*DEFAULT_METHODS, "qptas")
 RISKS = ("msd", "cvar")
 DEFAULT_PATH_OPTIONS = {
     "major_iteration_limit": 50_000_000,
@@ -164,13 +167,16 @@ def _profile_from_result(result) -> tuple[np.ndarray | None, np.ndarray | None]:
         return None, None
     x = getattr(result, "x", None)
     y = getattr(result, "y", None)
+    strategies = getattr(result, "strategies", None)
+    if strategies is not None:
+        x, y = strategies
     if x is None or y is None:
         return None, None
     return np.asarray(x, dtype=float), np.asarray(y, dtype=float)
 
 
 def _empty_method_metrics(prefix: str, elapsed_s: float, error: str | None) -> dict[str, Any]:
-    return {
+    out = {
         f"{prefix}_success": False,
         f"{prefix}_time_s": elapsed_s,
         f"{prefix}_eta": np.nan,
@@ -194,6 +200,17 @@ def _empty_method_metrics(prefix: str, elapsed_s: float, error: str | None) -> d
         f"{prefix}_best_certificate_eta": np.nan,
         f"{prefix}_best_certificate_iteration": None,
     }
+    if prefix == "qptas":
+        out.update(
+            {
+                "qptas_profiles_checked": None,
+                "qptas_total_profiles": None,
+                "qptas_best_response_solves": None,
+                "qptas_sampling_seed": None,
+                "qptas_termination_reason": "error" if error is not None else None,
+            }
+        )
+    return out
 
 
 def _certificate_metrics(prefix: str, cert: dict[str, Any]) -> dict[str, Any]:
@@ -283,6 +300,29 @@ def _stochastic_result_metrics(prefix: str, result, elapsed_s: float, error: str
             f"{prefix}_iterations": result.iterations if result is not None else None,
             f"{prefix}_best_certificate_eta": float(best_certificate.get("eta", np.nan)),
             f"{prefix}_best_certificate_iteration": best_certificate.get("iteration"),
+        }
+    )
+    return out
+
+
+def _qptas_result_metrics(result, elapsed_s: float) -> dict[str, Any]:
+    out = _empty_method_metrics("qptas", elapsed_s, None)
+    cert = result.certificate or {}
+    regrets = cert.get("regrets", (np.nan, np.nan))
+    out.update(
+        _certificate_metrics("qptas", {"eta": cert.get("eta", np.nan), "regret1": regrets[0], "regret2": regrets[1]})
+    )
+    x, y = _profile_from_result(result)
+    out.update(
+        {
+            "qptas_success": result.success,
+            "qptas_has_profile": x is not None and y is not None,
+            "qptas_solver": "highs",
+            "qptas_profiles_checked": result.profiles_checked,
+            "qptas_total_profiles": result.total_profiles,
+            "qptas_best_response_solves": result.best_response_solves,
+            "qptas_sampling_seed": result.seed,
+            "qptas_termination_reason": result.termination_reason,
         }
     )
     return out
@@ -398,6 +438,19 @@ def _run_stochastic_method(method: str, risk: str, A, B, p, args: argparse.Names
 def _run_method(method: str, risk: str, A, B, p, args: argparse.Namespace, seed: int, support_config):
     start = perf_counter()
     try:
+        if method == "qptas":
+            kwargs = {
+                "gamma": args.gamma,
+                "kappa": support_config.kappa,
+                "epsilon": args.epsilon,
+                "max_candidates": args.max_candidates,
+                "seed": seed,
+            }
+            if risk == "msd":
+                result = solve_msd_qptas([A, B], p, **kwargs)
+            else:
+                result = solve_cvar_qptas([A, B], p, alpha=args.alpha, **kwargs)
+            return result, _qptas_result_metrics(result, perf_counter() - start), None
         if method == "mcp":
             result, cert = _solve_mcp(risk, A, B, p, args)
             return (
@@ -638,7 +691,12 @@ def parse_args() -> argparse.Namespace:
         help="Stochastic-method regret tolerance; defaults to --epsilon.",
     )
     parser.add_argument("--epsilon-scr", type=float, default=None)
-    parser.add_argument("--max-candidates", type=int, default=100)
+    parser.add_argument(
+        "--max-candidates",
+        type=int,
+        default=100,
+        help="Support-search budget, or number of distinct random joint profiles for qptas (kappa=ceil(sqrt(n))).",
+    )
     parser.add_argument("--n-screen-starts", type=int, default=1)
     parser.add_argument("--n-support-starts", type=int, default=5)
     parser.add_argument("--screen-maxiter", type=int, default=300)
@@ -653,13 +711,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--gradient-clip-norm", type=float, default=None)
     parser.add_argument("--record-every", type=int, default=0)
     parser.add_argument("--certify-every", type=int, default=0)
-    parser.add_argument("--methods", nargs="+", choices=METHODS, default=list(METHODS))
+    parser.add_argument("--methods", nargs="+", choices=METHODS, default=list(DEFAULT_METHODS))
     parser.add_argument("--solver", default="pathampl")
     parser.add_argument("--fallback-solver", default="ipopt")
     parser.add_argument("--low", type=float, default=0.0)
     parser.add_argument("--high", type=float, default=1.0)
     parser.add_argument("--csv", type=Path, default=None)
     parser.add_argument("--quiet", action="store_true")
+    parser.add_argument(
+        "--fail-on-error",
+        action="store_true",
+        help="Exit nonzero after writing diagnostics if any method raises an error; search exhaustion is not an error.",
+    )
     args = parser.parse_args()
     if args.fallback_solver is not None and args.fallback_solver.lower() == "none":
         args.fallback_solver = None
@@ -685,6 +748,15 @@ def main() -> None:
     print_summary(rows, args.methods)
     if args.csv is not None:
         print(f"\nwrote {args.csv}")
+    if args.fail_on_error:
+        errors = [
+            f"{row['risk']} K={row['K']} n={row['n']} seed={row['seed']} {method}: {row[f'{method}_error']}"
+            for row in rows
+            for method in args.methods
+            if row.get(f"{method}_error")
+        ]
+        if errors:
+            raise SystemExit("\n".join(errors))
 
 
 if __name__ == "__main__":

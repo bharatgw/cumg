@@ -87,3 +87,28 @@ class SupportSearchResult:
     solver_result: SolverResult | None = None
     best_error: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class QPTASResult:
+    """Outcome of exhaustive or sampled search on a kappa-uniform profile grid.
+
+    Strategies and certificate are present only when all players' full-game
+    regrets pass epsilon. Grid exhaustion does not rule out an epsilon-DRE
+    outside the chosen grid. Sample exhaustion leaves untested grid profiles.
+    max_candidates and seed record the randomized search settings when used.
+    """
+
+    success: bool
+    model: str
+    kappa: int
+    epsilon: float
+    profiles_checked: int
+    total_profiles: int
+    best_response_solves: int
+    solve_time_s: float
+    termination_reason: str
+    strategies: tuple[np.ndarray, ...] | None = None
+    certificate: dict[str, Any] | None = None
+    max_candidates: int | None = None
+    seed: int | None = None

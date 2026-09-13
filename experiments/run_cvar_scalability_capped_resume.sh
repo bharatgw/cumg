@@ -289,6 +289,10 @@ xargs -n 6 -P "$WORKERS" bash -c '
   if [[ -n "$EPSILON_SCR" ]]; then
     command+=(--epsilon-scr "$EPSILON_SCR")
   fi
+  if [[ "$method" == "qptas" ]]; then
+    # LP failures must produce retryable error markers, not completed CSV shards.
+    command+=(--fail-on-error)
+  fi
 
   started_epoch=$(date +%s)
   echo "START $(date "+%Y-%m-%dT%H:%M:%S%z") risk=$risk K=$K n=$n rep=$rep method=$method seed=$seed" \

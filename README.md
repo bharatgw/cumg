@@ -164,6 +164,74 @@ result = solve_msd_mcp(A, B, p, gamma=0.8, solver="pathampl")
 print(result.x, result.y)
 ```
 
+## Kappa-uniform search
+
+For a supplied integer `kappa`, the QPTAS functions enumerate every strategy
+whose probabilities are integer multiples of `1 / kappa`, then every joint
+profile. Each candidate is checked against arbitrary mixed best responses
+using all payoff samples. A candidate is rejected as soon as one player's
+regret exceeds `epsilon`.
+
+```python
+from cumg import solve_msd_qptas, solve_cvar_qptas
+
+# A, B and p can be the scenario arrays from the quickstart above.
+result = solve_msd_qptas([A, B], p, gamma=0.8, kappa=4, epsilon=0.01)
+# Or use mean/lower-tail CVaR preferences:
+result = solve_cvar_qptas([A, B], p, gamma=0.8, alpha=0.5, kappa=4, epsilon=0.01)
+
+if result.success:
+    x, y = result.strategies
+    print(x, y, result.certificate["eta"])
+else:
+    print(result.termination_reason, result.profiles_checked)
+```
+
+For `m` players, pass a sequence of `m` payoff tensors, each with shape
+`(K, n_1, ..., n_m)`. Player counts and action sizes are inferred. `gamma`
+and CVaR's `alpha` can be scalars or vectors with one entry per player.
+Standalone generators `enumerate_kappa_uniform_strategies(n, kappa)` and
+`enumerate_kappa_uniform_profiles(action_sizes, kappa)` expose the same grids.
+
+To try a random sample of up to `N` distinct joint profiles, set
+`max_candidates=N` and a `seed` on either solver:
+
+```python
+result = solve_cvar_qptas(
+    [A, B], p, gamma=0.5, alpha=0.5, kappa=8, epsilon=0.01,
+    max_candidates=1000, seed=42,
+)
+
+# Or generate the candidates separately:
+from cumg import sample_kappa_uniform_profiles
+
+profiles = sample_kappa_uniform_profiles((50, 50), kappa=8, n_samples=1000, seed=42)
+```
+
+Sampling is uniform over the full joint grid, without replacement, and does
+not enumerate or allocate the full grid. It supports grid sizes larger than
+64-bit integers. The seed controls candidate selection; increasing `N` with
+the same seed extends the same sequence. Both solvers still stop immediately
+when a profile passes the full regret check. If all sampled profiles fail,
+`termination_reason="sample_exhausted"` means that untested profiles remain.
+If `N` reaches or exceeds the grid size, every profile is tried in random order
+unless an epsilon-DRE is found first.
+
+The full grid has `product_i comb(kappa + n_i - 1, n_i - 1)` profiles.
+With the default `max_candidates=None`, enumeration is lazy and deterministic
+and the search has no candidate cap.
+An arbitrary supplied `kappa` need not contain an epsilon-DRE: in that case,
+the result has `success=False` and `termination_reason="grid_exhausted"`.
+This does not rule out an equilibrium elsewhere. Regret checks use SciPy's
+floating-point LP solves and require no external MCP solver. Solver failures
+raise an exception rather than report grid exhaustion.
+
+For a remote MSD/CVaR campaign with 1,000 sampled profiles per run,
+`epsilon=0.01`, and `kappa=ceil(sqrt(n))`, use
+[`experiments/run_qptas_scalability_remote.sh`](experiments/run_qptas_scalability_remote.sh).
+See [the QPTAS remote-run guide](experiments/QPTAS_REMOTE.md) for the matching
+scalability grid, environment overrides, time caps, and resume instructions.
+
 ## Repository layout
 
 - `src/cumg/`: installable package source.

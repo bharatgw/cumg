@@ -3,7 +3,14 @@
 from .cvar import build_cvar_mcp_model, solve_cvar_mcp
 from .mcp import available_solvers, format_solver_availability, solve_pyomo_mcp_model, solver_available
 from .msd import build_msd_mcp_model, solve_msd_mcp
-from .results import SolverConfig, SolverResult, SupportSearchConfig, SupportSearchResult
+from .qptas import (
+    enumerate_kappa_uniform_profiles,
+    enumerate_kappa_uniform_strategies,
+    sample_kappa_uniform_profiles,
+    solve_cvar_qptas,
+    solve_msd_qptas,
+)
+from .results import QPTASResult, SolverConfig, SolverResult, SupportSearchConfig, SupportSearchResult
 from .small_support import (
     full_cvar_regret,
     full_msd_regret,
@@ -15,6 +22,7 @@ from .small_support import (
 from .stochastic_fo import StochasticFOConfig, StochasticFOResult, solve_cvar_stochastic_fo, solve_msd_stochastic_fo
 
 __all__ = [
+    "QPTASResult",
     "SolverConfig",
     "SolverResult",
     "SupportSearchConfig",
@@ -25,6 +33,9 @@ __all__ = [
     "build_msd_mcp_model",
     "available_solvers",
     "format_solver_availability",
+    "enumerate_kappa_uniform_profiles",
+    "enumerate_kappa_uniform_strategies",
+    "sample_kappa_uniform_profiles",
     "full_cvar_regret",
     "full_msd_regret",
     "small_support_action_search_cvar",
@@ -32,8 +43,10 @@ __all__ = [
     "small_support_search_cvar",
     "small_support_search_msd",
     "solve_cvar_mcp",
+    "solve_cvar_qptas",
     "solve_cvar_stochastic_fo",
     "solve_msd_mcp",
+    "solve_msd_qptas",
     "solve_msd_stochastic_fo",
     "solve_pyomo_mcp_model",
     "solver_available",
