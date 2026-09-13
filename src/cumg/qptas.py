@@ -21,11 +21,7 @@ from .validation import normalize_probabilities
 
 
 def _positive_integer(value: int, name: str) -> int:
-    if (
-        isinstance(value, (bool, np.bool_))
-        or not isinstance(value, (int, np.integer))
-        or value <= 0
-    ):
+    if isinstance(value, (bool, np.bool_)) or not isinstance(value, (int, np.integer)) or value <= 0:
         raise ValueError(f"{name} must be a positive integer.")
     return int(value)
 
@@ -54,9 +50,7 @@ def enumerate_kappa_uniform_strategies(n: int, kappa: int) -> Iterator[np.ndarra
         counts[i + 1] = remaining
 
 
-def enumerate_kappa_uniform_profiles(
-    action_sizes: Sequence[int], kappa: int
-) -> Iterator[tuple[np.ndarray, ...]]:
+def enumerate_kappa_uniform_profiles(action_sizes: Sequence[int], kappa: int) -> Iterator[tuple[np.ndarray, ...]]:
     """Lazily enumerate the Cartesian product of all players' kappa-uniform grids.
 
     Unlike ``itertools.product``, this does not cache each player's entire grid.
@@ -131,9 +125,7 @@ def sample_kappa_uniform_profiles(
     if not sizes:
         raise ValueError("At least one player is required.")
     if seed is not None:
-        if isinstance(seed, (bool, np.bool_)) or not isinstance(
-            seed, (int, np.integer)
-        ):
+        if isinstance(seed, (bool, np.bool_)) or not isinstance(seed, (int, np.integer)):
             raise ValueError("seed must be an integer or None.")
         seed = int(seed)
     rng = Random(seed)
@@ -160,9 +152,7 @@ def _player_parameters(value, m: int, name: str) -> np.ndarray:
     if parameters.ndim == 0:
         parameters = np.full(m, float(parameters))
     if parameters.shape != (m,) or not np.all(np.isfinite(parameters)):
-        raise ValueError(
-            f"{name} must be finite and either a scalar or a vector of length {m}."
-        )
+        raise ValueError(f"{name} must be finite and either a scalar or a vector of length {m}.")
     return parameters
 
 
@@ -190,13 +180,9 @@ def _solve_qptas(
         raise ValueError("At least one player is required.")
     shape = tensors[0].shape
     if len(shape) != m + 1 or any(size == 0 for size in shape):
-        raise ValueError(
-            "Each payoff tensor must have nonempty shape (K, n_1, ..., n_m)."
-        )
+        raise ValueError("Each payoff tensor must have nonempty shape (K, n_1, ..., n_m).")
     if any(tensor.shape != shape for tensor in tensors):
-        raise ValueError(
-            "All players' payoff tensors must have the same shape (K, n_1, ..., n_m)."
-        )
+        raise ValueError("All players' payoff tensors must have the same shape (K, n_1, ..., n_m).")
     if any(not np.all(np.isfinite(tensor)) for tensor in tensors):
         raise ValueError("Payoff tensors must contain finite values.")
     K, *action_sizes = shape
@@ -229,29 +215,17 @@ def _solve_qptas(
             payoff_by_action = tensor
             for opponent in range(m - 1, -1, -1):
                 if opponent != player:
-                    payoff_by_action = np.tensordot(
-                        payoff_by_action, profile[opponent], axes=([opponent + 1], [0])
-                    )
+                    payoff_by_action = np.tensordot(payoff_by_action, profile[opponent], axes=([opponent + 1], [0]))
             state_payoffs = payoff_by_action @ profile[player]
             if model == "MSD":
-                current = msd_value_from_state_payoffs(
-                    state_payoffs, probabilities, gammas[player]
-                )
-                best = _maximize_msd_on_simplex(
-                    payoff_by_action, probabilities, gammas[player]
-                )
+                current = msd_value_from_state_payoffs(state_payoffs, probabilities, gammas[player])
+                best = _maximize_msd_on_simplex(payoff_by_action, probabilities, gammas[player])
             else:
-                current = cvar_value_from_state_payoffs(
-                    state_payoffs, probabilities, gammas[player], alphas[player]
-                )
-                best = _maximize_cvar_on_simplex(
-                    payoff_by_action, probabilities, gammas[player], alphas[player]
-                )
+                current = cvar_value_from_state_payoffs(state_payoffs, probabilities, gammas[player], alphas[player])
+                best = _maximize_cvar_on_simplex(payoff_by_action, probabilities, gammas[player], alphas[player])
             best_response_solves += 1
             if not np.isfinite(current) or not np.isfinite(best["value"]):
-                raise RuntimeError(
-                    "QPTAS regret evaluation returned a non-finite payoff."
-                )
+                raise RuntimeError("QPTAS regret evaluation returned a non-finite payoff.")
             best = _keep_current_strategy_if_better(best, profile[player], current)
             regret = max(0.0, float(best["value"] - current))
             if regret > epsilon:
@@ -278,9 +252,7 @@ def _solve_qptas(
                 },
                 termination_reason="epsilon_reached",
                 max_candidates=max_candidates,
-                seed=int(seed)
-                if max_candidates is not None and seed is not None
-                else None,
+                seed=int(seed) if max_candidates is not None and seed is not None else None,
             )
     return QPTASResult(
         success=False,
@@ -291,9 +263,7 @@ def _solve_qptas(
         total_profiles=total_profiles,
         best_response_solves=best_response_solves,
         solve_time_s=perf_counter() - start,
-        termination_reason="grid_exhausted"
-        if profiles_checked == total_profiles
-        else "sample_exhausted",
+        termination_reason="grid_exhausted" if profiles_checked == total_profiles else "sample_exhausted",
         max_candidates=max_candidates,
         seed=int(seed) if max_candidates is not None and seed is not None else None,
     )
