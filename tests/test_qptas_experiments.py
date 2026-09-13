@@ -285,3 +285,75 @@ def test_qptas_shell_timeout_is_censored_and_not_retried(runner_env, tmp_path):
         assert row["time_s"] == "1"
         assert row["exit_code"] == "124"
         assert len(list((directory / "logs").glob("*_attempt*.log"))) == 1
+
+
+@pytest.mark.parametrize("rsync_exit", [0, 23])
+def test_qptas_sync_destination_success_counts_and_transfer_failure(runner_env, tmp_path, rsync_exit):
+    # Copy the standalone script to prove that its destination follows its checkout,
+    # including spaces, regardless of the caller's working directory.
+    checkout = tmp_path / "local checkout"
+    script = checkout / "experiments/sync_qptas_results.sh"
+    script.parent.mkdir(parents=True)
+    shutil.copyfile(ROOT / "experiments/sync_qptas_results.sh", script)
+    destination = checkout / "experiments/results/remote/qptas_scalability/sampled_1000_v1"
+    destination.mkdir(parents=True)
+    notes = destination / "local_notes.txt"
+    notes.write_text("keep this")
+    source_csv = tmp_path / "source.csv"
+    with source_csv.open("w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["risk", "method", "status", "success"])
+        writer.writerows(
+            [
+                ["msd", "qptas", "completed", "True"],
+                ["msd", "qptas", "completed", "False"],
+                ["msd", "qptas", "error", "False"],
+                ["cvar", "qptas", "completed", "True"],
+                ["cvar", "qptas", "completed", "False"],
+                ["cvar", "qptas", "timeout", "True"],  # Non-completed rows cannot count as successes.
+                ["msd", "mcp", "completed", "True"],  # Ignore other methods.
+            ]
+        )
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    fake_rsync = bin_dir / "rsync"
+    fake_rsync.write_text(
+        "#!/usr/bin/env bash\n"
+        'printf "%s\\n" "$@" > "$RSYNC_ARGS_FILE"\n'
+        'if (( RSYNC_EXIT_CODE != 0 )); then exit "$RSYNC_EXIT_CODE"; fi\n'
+        'cp "$FIXTURE_CSV" "${@: -1}/capped_method_results.csv"\n'
+    )
+    fake_rsync.chmod(0o755)
+    args_file = tmp_path / "rsync_args.txt"
+    env = {
+        **runner_env,
+        "PATH": str(bin_dir) + os.pathsep + runner_env["PATH"],
+        "RSYNC_ARGS_FILE": str(args_file),
+        "RSYNC_EXIT_CODE": str(rsync_exit),
+        "FIXTURE_CSV": str(source_csv),
+    }
+    result = subprocess.run(
+        ["bash", str(script), "root@example.invalid"],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode == rsync_exit, result.stdout + result.stderr
+    arguments = args_file.read_text().splitlines()
+    assert arguments[-2] == (
+        "root@example.invalid:/root/cumg/experiments/results/remote/qptas_scalability/sampled_1000_v1/"
+    )
+    assert arguments[-1] == str(destination) + "/"
+    assert "--delete" not in arguments
+    assert "--exclude=*.partial.csv" in arguments
+    assert "--exclude=*.lock/" in arguments
+    assert notes.read_text() == "keep this"
+    if rsync_exit:
+        assert "Success rate" not in result.stdout
+    else:
+        assert "MSD 1 / 3 33.3%" in " ".join(result.stdout.split())
+        assert "CVAR 1 / 3 33.3%" in " ".join(result.stdout.split())
+        assert "TOTAL 2 / 6 33.3%" in " ".join(result.stdout.split())
+        assert "completed=4, error=1, timeout=1" in result.stdout

@@ -88,3 +88,21 @@ failed subprocess; inspect its log. Resume skips completed searches and timeouts
 Set `RETRY_ERRORS=1` on the same invocation to retry errors, preserving earlier
 attempt logs. A live worker owns a per-job lock; after a forced shutdown, remove
 any stale lock only after confirming that its worker is no longer running.
+
+## Download and count successes
+
+After the campaign finishes, run this in your **local checkout**, using your
+server's SSH address or host alias:
+
+```bash
+bash experiments/sync_qptas_results.sh root@YOUR_SERVER_IP
+```
+
+The script downloads the campaign from `/root/cumg` into the matching local
+`experiments/results/remote/qptas_scalability/sampled_1000_v1/` directory, then
+prints successes, total runs, and success rates for MSD, CVaR, and both combined.
+It counts rows with `status=completed` and `success=True`; the denominator includes
+all QPTAS rows, and status counts are printed separately. It uses Python 3's
+standard library and rsync, preserves local-only files, and skips partial CSVs
+and worker locks. A failed transfer stops the script before reporting counts.
+Override `VERSION`, `REMOTE_REPO`, `LOCAL_RESULT_DIR`, or `PYTHON_BIN` as needed.

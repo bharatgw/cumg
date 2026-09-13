@@ -26,9 +26,10 @@ K_GRID = (30, 100, 250, 500)
 N_GRID = (5, 10, 20, 50)
 RISK_GRID = ("msd", "cvar")
 EPSILON = 1e-2
+MIN_SUCCESSFUL_SEEDS = 5
 CVaR_CAP_SECONDS = 24 * 60 * 60
 
-METHODS = sa.SCALABILITY_METHODS
+METHODS = (*sa.SCALABILITY_METHODS, "qptas")
 CERTIFICATE_METHODS = (*METHODS, "uniform")
 CERTIFICATE_PLOT_ORDER = (
     "uniform",
@@ -38,6 +39,7 @@ CERTIFICATE_PLOT_ORDER = (
     "restricted_mcp",
     "stochastic_minibatch",
     "stochastic_full_batch",
+    "qptas",
 )
 METHOD_LABELS = {
     "mcp": "MCP",
@@ -46,6 +48,7 @@ METHOD_LABELS = {
     "restricted_mcp": "Restricted MCP",
     "stochastic_full_batch": "Stochastic full batch",
     "stochastic_minibatch": "Stochastic minibatch",
+    "qptas": "QPTAS (sampled)",
     "uniform": "Uniform baseline",
 }
 METHOD_COLORS = {
@@ -55,6 +58,7 @@ METHOD_COLORS = {
     "restricted_mcp": "#D55E00",
     "stochastic_full_batch": "#CC79A7",
     "stochastic_minibatch": "#56B4E9",
+    "qptas": "#7B3294",
     "uniform": "#666666",
 }
 METHOD_LINESTYLES = {
@@ -64,6 +68,7 @@ METHOD_LINESTYLES = {
     "restricted_mcp": "-",
     "stochastic_full_batch": "--",
     "stochastic_minibatch": ":",
+    "qptas": "-.",
     "uniform": "--",
 }
 METHOD_MARKERS = {
@@ -73,34 +78,55 @@ METHOD_MARKERS = {
     "restricted_mcp": "o",
     "stochastic_full_batch": "^",
     "stochastic_minibatch": "s",
-    "uniform": "x",
+    "qptas": "D",
+    "uniform": "v",
 }
 
 
 def load_scalability_data() -> pd.DataFrame:
-    """Load the authoritative MSD and capped CVaR scalability results."""
+    """Load matched legacy, capped CVaR, and sampled QPTAS results."""
 
     msd_wide = sa.load_csv_shards(RESULTS_DIR / "remote/msd_cvar_part_scalability", "*K*_n*.csv")
     msd_wide = msd_wide.loc[msd_wide["risk"].eq("msd")].copy()
 
     capped = pd.read_csv(RESULTS_DIR / "remote/cvar_scalability/capped_24h_v1/capped_method_results.csv")
-    cvar_wide = sa.capped_results_to_wide(capped)
+    cvar_wide = sa.capped_results_to_wide(capped, expected_methods=sa.SCALABILITY_METHODS)
     wide = pd.concat([msd_wide, cvar_wide], ignore_index=True, sort=False)
-    long = sa.wide_scalability_to_long(wide, methods=METHODS)
+    long = sa.wide_scalability_to_long(wide, methods=sa.SCALABILITY_METHODS)
+
+    qptas = pd.read_csv(RESULTS_DIR / "remote/qptas_scalability/sampled_1000_v1/capped_method_results.csv")
+    qptas_wide = sa.capped_results_to_wide(qptas, expected_methods=("qptas",))
+    qptas_long = sa.wide_scalability_to_long(qptas_wide, methods=("qptas",))
+    long = pd.concat([long, qptas_long], ignore_index=True, sort=False)
 
     uniform = pd.read_csv(RESULTS_DIR / "uniform/uniform_profile_baseline.csv")
     long = sa.append_uniform_baseline(long, uniform)
-    long = long.loc[long["K"].isin(K_GRID)].copy()
+    long = long.loc[long["risk"].isin(RISK_GRID) & long["n"].isin(N_GRID) & long["K"].isin(K_GRID)].copy()
 
     primary = long.loc[long["method"].isin(METHODS)]
-    cell_counts = primary.groupby(["risk", "n", "K", "method"], dropna=False).size()
+    cells = primary.groupby(["risk", "n", "K", "method"], dropna=False)
+    cell_counts = cells.size()
     expected_cells = len(RISK_GRID) * len(N_GRID) * len(K_GRID) * len(METHODS)
-    if len(cell_counts) != expected_cells or not cell_counts.eq(20).all():
-        raise ValueError("Scalability data do not contain 20 rows for every plotted method cell")
+    if len(cell_counts) != expected_cells or not cell_counts.eq(20).all() or not cells["seed"].nunique().eq(20).all():
+        raise ValueError("Scalability data do not contain 20 distinct seeds for every plotted method cell")
+    matched_methods = primary.groupby(["risk", "n", "K", "seed"], dropna=False)["method"].nunique()
+    if not matched_methods.eq(len(METHODS)).all():
+        raise ValueError("Scalability methods do not use the same seeds within each plotted cell")
 
-    eta = pd.to_numeric(long["eta"], errors="coerce")
-    long["certified_at_1e-2"] = eta.notna() & eta.le(EPSILON)
     return long
+
+
+def _summarize_certified_runs(long: pd.DataFrame) -> pd.DataFrame:
+    """Use the same certificate-based success rule for both figures.
+
+    Runtime summaries still include all attempts. Native solver success flags
+    do not determine whether a recorded profile meets the common tolerance.
+    """
+
+    work = long.copy()
+    work["eta"] = pd.to_numeric(work["eta"], errors="coerce")
+    work["success"] = work["status"].eq("completed") & np.isfinite(work["eta"]) & work["eta"].le(EPSILON)
+    return sa.summarize_scalability(work)
 
 
 def _style_axes(axes: np.ndarray) -> None:
@@ -111,7 +137,7 @@ def _style_axes(axes: np.ndarray) -> None:
 
 
 def _method_legend(methods: tuple[str, ...]) -> list[Line2D]:
-    return [
+    handles = [
         Line2D(
             [0],
             [0],
@@ -124,12 +150,46 @@ def _method_legend(methods: tuple[str, ...]) -> list[Line2D]:
         )
         for method in methods
     ]
+    handles.append(
+        Line2D(
+            [0],
+            [0],
+            color="#222222",
+            marker="x",
+            linestyle="none",
+            markersize=6,
+            label=f"Fewer than {MIN_SUCCESSFUL_SEEDS} seeds with η ≤ {EPSILON:g}",
+        )
+    )
+    return handles
+
+
+def _plot_method_points(ax, points: pd.DataFrame, method: str, value_column: str) -> None:
+    """Draw a method curve, replacing its marker when too few seeds certify."""
+
+    color = METHOD_COLORS[method]
+    zorder = 1 if method == "uniform" else 2
+    ax.plot(
+        points["K"],
+        points[value_column],
+        color=color,
+        linestyle=METHOD_LINESTYLES[method],
+        linewidth=1.8,
+        zorder=zorder,
+    )
+    low_success = points["successes"].lt(MIN_SUCCESSFUL_SEEDS)
+    ordinary = points.loc[~low_success]
+    flagged = points.loc[low_success]
+    ax.scatter(
+        ordinary["K"], ordinary[value_column], color=color, marker=METHOD_MARKERS[method], s=22, zorder=zorder + 1
+    )
+    ax.scatter(flagged["K"], flagged[value_column], color=color, marker="x", s=48, linewidths=1.8, zorder=zorder + 2)
 
 
 def plot_runtime(long: pd.DataFrame, output_path: Path) -> None:
     """Plot median observed-or-capped runtime with interquartile bands."""
 
-    summary = sa.summarize_scalability(long.loc[long["method"].isin(METHODS)])
+    summary = _summarize_certified_runs(long.loc[long["method"].isin(METHODS)])
     fig, axes = plt.subplots(2, 4, figsize=(15.5, 7.2), sharex=True, sharey=True)
     _style_axes(axes)
 
@@ -142,13 +202,7 @@ def plot_runtime(long: pd.DataFrame, output_path: Path) -> None:
                 if points.empty:
                     continue
                 color = METHOD_COLORS[method]
-                ax.plot(
-                    points["K"],
-                    points["capped_time_median"],
-                    color=color,
-                    linestyle=METHOD_LINESTYLES[method],
-                    linewidth=1.8,
-                )
+                _plot_method_points(ax, points, method, "capped_time_median")
                 ax.fill_between(
                     points["K"],
                     points["capped_time_q25"],
@@ -156,26 +210,6 @@ def plot_runtime(long: pd.DataFrame, output_path: Path) -> None:
                     color=color,
                     alpha=0.12,
                     linewidth=0,
-                )
-                zero_success = points["successes"].eq(0)
-                ordinary = points.loc[~zero_success]
-                failed = points.loc[zero_success]
-                ax.scatter(
-                    ordinary["K"],
-                    ordinary["capped_time_median"],
-                    color=color,
-                    marker=METHOD_MARKERS[method],
-                    s=22,
-                    zorder=3,
-                )
-                ax.scatter(
-                    failed["K"],
-                    failed["capped_time_median"],
-                    color=color,
-                    marker="x",
-                    s=48,
-                    linewidths=1.8,
-                    zorder=4,
                 )
 
             if risk == "cvar":
@@ -189,28 +223,17 @@ def plot_runtime(long: pd.DataFrame, output_path: Path) -> None:
                 ax.set_ylabel("Median runtime (seconds)", fontsize=9)
 
     handles = _method_legend(METHODS)
-    handles.append(
-        Line2D(
-            [0],
-            [0],
-            color="#222222",
-            marker="x",
-            linestyle="none",
-            markersize=6,
-            label="Zero successful runs",
-        )
-    )
     handles.append(Line2D([0], [0], color="#555555", linestyle="--", label="CVaR 24-hour cap"))
     fig.legend(
         handles=handles,
         loc="lower center",
         bbox_to_anchor=(0.5, -0.01),
-        ncol=4,
+        ncol=3,
         frameon=False,
         fontsize=9,
     )
     fig.suptitle("Scalability runtime across 20 matched random games per cell", fontsize=14)
-    fig.tight_layout(rect=(0, 0.09, 1, 0.96))
+    fig.tight_layout(rect=(0, 0.13, 1, 0.96))
     fig.savefig(output_path, dpi=200, bbox_inches="tight", facecolor="white")
     plt.close(fig)
 
@@ -218,14 +241,7 @@ def plot_runtime(long: pd.DataFrame, output_path: Path) -> None:
 def plot_certificate_rate(long: pd.DataFrame, output_path: Path) -> None:
     """Plot the share of runs with a finite exact-regret certificate at eta <= 1e-2."""
 
-    summary = (
-        long.loc[long["method"].isin(CERTIFICATE_METHODS)]
-        .groupby(["risk", "n", "K", "method"], as_index=False, dropna=False)
-        .agg(
-            reps=("seed", "size"),
-            certificate_rate=("certified_at_1e-2", "mean"),
-        )
-    )
+    summary = _summarize_certified_runs(long.loc[long["method"].isin(CERTIFICATE_METHODS)])
     fig, axes = plt.subplots(2, 4, figsize=(15.5, 7.2), sharex=True, sharey=True)
     _style_axes(axes)
 
@@ -237,16 +253,7 @@ def plot_certificate_rate(long: pd.DataFrame, output_path: Path) -> None:
                 points = panel.loc[panel["method"].eq(method)].sort_values("K")
                 if points.empty:
                     continue
-                ax.plot(
-                    points["K"],
-                    points["certificate_rate"],
-                    color=METHOD_COLORS[method],
-                    marker=METHOD_MARKERS[method],
-                    linestyle=METHOD_LINESTYLES[method],
-                    linewidth=1.8,
-                    markersize=4,
-                    zorder=1 if method == "uniform" else 2,
-                )
+                _plot_method_points(ax, points, method, "success_rate")
 
             ax.set_xticks(K_GRID)
             ax.set_ylim(-0.03, 1.03)
@@ -261,12 +268,12 @@ def plot_certificate_rate(long: pd.DataFrame, output_path: Path) -> None:
         handles=_method_legend(CERTIFICATE_METHODS),
         loc="lower center",
         bbox_to_anchor=(0.5, -0.01),
-        ncol=4,
+        ncol=3,
         frameon=False,
         fontsize=9,
     )
     fig.suptitle("Comparable equilibrium-certificate rate", fontsize=14)
-    fig.tight_layout(rect=(0, 0.09, 1, 0.96))
+    fig.tight_layout(rect=(0, 0.13, 1, 0.96))
     fig.savefig(output_path, dpi=200, bbox_inches="tight", facecolor="white")
     plt.close(fig)
 

@@ -24,7 +24,7 @@ to compare the computational approaches.
 
 ## Scalability experiments
 
-The committed scalability experiments compare six methods on random two-player
+The committed scalability experiments compare seven methods on random two-player
 games with `n ∈ {5, 10, 20, 50}` actions per player and
 `K ∈ {5, 10, 30, 100, 250, 500}` payoff samples. Each method uses the same 20
 game seeds within a `(risk, K, n)` cell. Payoffs are sampled independently from
@@ -33,16 +33,20 @@ game seeds within a `(risk, K, n)` cell. Payoffs are sampled independently from
 
 The final CVaR campaign imposes a 24-hour wall-clock cap separately on every
 method and replicate. Timeout runtimes are therefore right-censored at 86,400
-seconds. MSD uses the original uncapped campaign. Runtime is the duration of
-the configured attempt, whether or not it produced a certificate.
+seconds. The six existing MSD methods use the original uncapped campaign.
+Sampled QPTAS checks up to 1,000 distinct joint profiles with
+`kappa=ceil(sqrt(n))`, using all K samples for each best-response LP; it has a
+24-hour per-run cap for both risks. Runtime is the duration of the configured
+attempt, whether or not it produced a certificate.
 
 ### Runtime scaling
 
 ![Median scalability runtime for MSD and CVaR](docs/figures/scalability_runtime.png)
 
 *Points are medians over 20 matched games and bands are interquartile ranges.
-Crosses mark cells in which none of the 20 attempts met that method's configured
-success criterion. CVaR timeout attempts contribute their 24-hour cap, so these
+Both figures count success when a completed run has a finite recorded certificate
+\(η ≤ 0.01\). Crosses mark each method's `(risk, n, K)` cell with fewer than
+five successful seeds out of 20. CVaR timeout attempts contribute their 24-hour cap, so these
 are observed-or-capped runtime summaries rather than uncensored completion
 times.*
 
@@ -50,16 +54,15 @@ times.*
 
 ![Share of scalability runs certified at eta at most 0.01](docs/figures/scalability_certificate_rate.png)
 
-*A run is counted when its recorded exact-regret certificate satisfies
-\(η ≤ 10^-2\). This common ex-post criterion is used instead of the
-methods' native success flags; in particular, the stochastic runs used a
-stricter stopping tolerance. The uniform profile is included as a diagnostic
-baseline on the same game seeds.*
+*Success uses the same finite-certificate threshold and cross markers as the
+runtime figure. The methods' native success flags do not determine the plotted
+counts; in particular, the stochastic runs used a stricter stopping tolerance.
+The uniform profile is included as a diagnostic baseline on the same game seeds.*
 
 ### Main takeaways
 
 - **CVaR equilibrium solves take longer.** Within the displayed grid, 126 of
-  1,920 configured CVaR method runs reached the 24-hour cap: 75 action-dual and
+  2,240 configured CVaR method runs reached the 24-hour cap: 75 action-dual and
   51 screened-dual runs. No other method recorded a timeout.
 - **Exact methods do not converge with scale.** Direct MCP
   and restricted MCP often terminate much sooner than the sparse-support
@@ -77,6 +80,9 @@ baseline on the same game seeds.*
   This primarily reflects the initialized uniform action profile already being
   an epsilon-equilibrium at the chosen tolerance because payoffs concentrate in
   these random games.
+- **Sampled QPTAS finds certificates within a small search budget.** It certifies
+  256/320 displayed MSD instances and 204/320 CVaR instances within 1,000 sampled
+  profiles per instance. Unsuccessful runs exhaust that budget.
 - **The random-game design has a strong concentration effect.** The uniform
   profile is already certified on 253/320 CVaR and 231/320 MSD instances and on
   every `K=500` instance. This is an empirical feature of the i.i.d. Uniform[0,1]
