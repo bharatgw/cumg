@@ -28,6 +28,8 @@ class StochasticFOConfig:
     max_iter and stagnation limits apply separately to each start. Periodic
     regret stopping requires certify_every; otherwise only the final certificate
     is available. The default regret threshold is 0.001, not 0.01.
+    theta_step_size optionally sets a separate initial CVaR threshold learning
+    rate, with the same step_decay; None uses step_size. MSD ignores this rate.
     """
 
     kappa: float = 1e-2
@@ -51,6 +53,7 @@ class StochasticFOConfig:
     stagnation_atol: float = 0.0
     n_random_starts: int = 4
     jit_updates: bool = False
+    theta_step_size: float | None = None
 
 
 @dataclass(frozen=True)
@@ -134,6 +137,8 @@ def _validate_config(config: StochasticFOConfig, K: int) -> int:
         raise ValueError("max_iter must be a nonnegative integer.")
     if not np.isfinite(config.step_size) or config.step_size <= 0:
         raise ValueError("step_size must be finite and positive.")
+    if config.theta_step_size is not None and (not np.isfinite(config.theta_step_size) or config.theta_step_size <= 0):
+        raise ValueError("theta_step_size must be finite and positive when provided.")
     if not np.isfinite(config.step_decay) or config.step_decay < 0:
         raise ValueError("step_decay must be finite and nonnegative.")
     if config.batch_size is None:
@@ -553,7 +558,11 @@ def _run_stochastic_fo(
         _, pullback = jax.vjp(lambda z: residual_fn(z, batch1), params)
         grad = pullback(residual2)[0]
         grad = _clip_gradient(jnp, grad, config.gradient_clip_norm)
-        params = tuple(param - step * update for param, update in zip(params, grad, strict=True))
+        theta_step = step if config.theta_step_size is None else step * (config.theta_step_size / config.step_size)
+        params = tuple(
+            param - (step if index < 2 else theta_step) * update
+            for index, (param, update) in enumerate(zip(params, grad, strict=True))
+        )
         return project_fn(jnp, params, config)
 
     # Optional compilation changes execution only: sampling, checkpoints, and

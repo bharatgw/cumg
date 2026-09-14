@@ -200,6 +200,7 @@ def _stochastic_config(args: argparse.Namespace, K: int, seed: int, method: str)
         stagnation_window=optional_positive_int(getattr(args, "stagnation_window", None)),
         stagnation_rtol=getattr(args, "stagnation_rtol", 0.0),
         stagnation_atol=getattr(args, "stagnation_atol", 0.0),
+        jit_updates=getattr(args, "jit_updates", False),
     )
 
 
@@ -642,6 +643,7 @@ def run_instance(args: argparse.Namespace, risk: str, K: int, n: int, seed: int)
         "stochastic_entropy_kappa": args.entropy_kappa,
         "stochastic_smoothing_tau": args.smoothing_tau,
         "stochastic_step_size": args.step_size,
+        "stochastic_theta_step_size": args.step_size if risk == "cvar" else None,
         "stochastic_step_decay": args.step_decay,
         "stochastic_logit_bound": args.logit_bound,
         "stochastic_gradient_clip_norm": args.gradient_clip_norm,
@@ -652,6 +654,7 @@ def run_instance(args: argparse.Namespace, risk: str, K: int, n: int, seed: int)
         "stochastic_stagnation_window": optional_positive_int(getattr(args, "stagnation_window", None)),
         "stochastic_stagnation_rtol": getattr(args, "stagnation_rtol", 0.0),
         "stochastic_stagnation_atol": getattr(args, "stagnation_atol", 0.0),
+        "stochastic_jit_updates": getattr(args, "jit_updates", False),
         "methods": ",".join(args.methods),
     }
     results: dict[str, Any] = {}
@@ -810,6 +813,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--stagnation-window", type=int, default=None, help="FO stagnation window; 0 disables it.")
     parser.add_argument("--stagnation-rtol", type=float, default=0.0)
     parser.add_argument("--stagnation-atol", type=float, default=0.0)
+    parser.add_argument("--jit-updates", action="store_true", help="Compile FO updates with JAX, as in the pilot.")
     parser.add_argument("--methods", nargs="+", choices=METHODS, default=list(DEFAULT_METHODS))
     parser.add_argument("--solver", default="pathampl")
     parser.add_argument("--fallback-solver", default="ipopt")

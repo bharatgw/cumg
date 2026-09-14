@@ -19,7 +19,8 @@ def assert_mixed_strategy(strategy):
 
 @pytest.mark.parametrize("solver", [solve_msd_stochastic_fo, solve_cvar_stochastic_fo])
 @pytest.mark.parametrize("batch_size", [None, 2])
-def test_compiled_updates_match_eager_trajectory(solver, batch_size):
+@pytest.mark.parametrize("theta_step_size", [None, 0.0001])
+def test_compiled_updates_match_eager_trajectory(solver, batch_size, theta_step_size):
     A, B = np.random.default_rng(7).random((2, 4, 3, 2))
     config = StochasticFOConfig(
         kappa=0.003,
@@ -27,6 +28,7 @@ def test_compiled_updates_match_eager_trajectory(solver, batch_size):
         max_iter=20,
         batch_size=batch_size,
         step_size=0.01,
+        theta_step_size=theta_step_size,
         seed=13,
         x0=np.array([0.2, 0.3, 0.5]),
         y0=np.array([0.7, 0.3]),
@@ -44,6 +46,37 @@ def test_compiled_updates_match_eager_trajectory(solver, batch_size):
             np.testing.assert_allclose(first[key], second[key], rtol=1e-8, atol=1e-10)
         if "theta" in first:
             np.testing.assert_allclose(first["theta"], second["theta"], rtol=1e-8, atol=1e-10)
+
+
+@pytest.mark.parametrize("jit_updates", [False, True])
+@pytest.mark.parametrize("theta_step_size", [None, 0.01])
+def test_threshold_rate_matches_closed_form_quadratic_descent(jit_updates, theta_step_size):
+    from cumg.stochastic_fo import _require_jax, _run_stochastic_fo
+
+    jax, jnp = _require_jax()
+    initial = (jnp.array([1.0, -1.0]), jnp.array([2.0, -2.0]), jnp.array(3.0), jnp.array(-4.0))
+    config = StochasticFOConfig(
+        max_iter=3,
+        step_size=0.2,
+        theta_step_size=theta_step_size,
+        step_decay=0.5,
+        n_random_starts=0,
+        jit_updates=jit_updates,
+    )
+    # F(z)=z makes 1/2 ||F(z)||^2 a quadratic with a known descent trajectory.
+    params, *_ = _run_stochastic_fo(
+        jax,
+        jnp,
+        initial,
+        lambda z, batch: jnp.concatenate([jnp.ravel(leaf) for leaf in z]),
+        lambda jnp, z, config: z,
+        config,
+        K=2,
+    )
+    for index, (before, after) in enumerate(zip(initial, params, strict=True)):
+        rate = 0.2 if index < 2 or theta_step_size is None else theta_step_size
+        expected = before * np.prod(1 - rate / np.sqrt(np.arange(1, 4)))
+        np.testing.assert_allclose(after, expected, atol=1e-12, rtol=0)
 
 
 def test_varphi_tau_is_stable_and_approximates_positive_part():
@@ -69,6 +102,9 @@ def test_stochastic_fo_rejects_invalid_parameters():
         solve_msd_stochastic_fo(A, B, p, gamma=0.0, config=StochasticFOConfig(tau=0.0))
     with pytest.raises(ValueError, match="batch_size"):
         solve_msd_stochastic_fo(A, B, p, gamma=0.0, config=StochasticFOConfig(batch_size=0))
+    for value in (0, -1, np.nan, np.inf):
+        with pytest.raises(ValueError, match="theta_step_size"):
+            solve_cvar_stochastic_fo(A, B, p, config=StochasticFOConfig(theta_step_size=value))
     with pytest.raises(ValueError, match="requires certify_every"):
         solve_msd_stochastic_fo(
             A,

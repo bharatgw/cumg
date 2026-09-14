@@ -288,6 +288,13 @@ def test_population_shell_default_plan(runner_env):
         "EPSILON=0.01",
         "STOCHASTIC_REGRET_TOLERANCE=0.01",
         "STOCHASTIC_N_RANDOM_STARTS=4",
+        "STOCHASTIC_ENTROPY_KAPPA=0.01",
+        "STOCHASTIC_SMOOTHING_TAU=0.002",
+        "STOCHASTIC_MSD_STEP_SIZE=1000",
+        "STOCHASTIC_CVAR_STEP_SIZE=500",
+        "STOCHASTIC_STEP_DECAY=0.5",
+        "STOCHASTIC_LOGIT_BOUND=20",
+        "STOCHASTIC_JIT_UPDATES=1",
         "PAYOFF_MODEL=cell_beta_uniform_v1",
         "MAX_ITER=2000",
         "MAX_CANDIDATES=1000",
@@ -331,6 +338,36 @@ def test_population_shell_default_plan(runner_env):
     assert sum(row[1] == "500" for row in rows) == 160
     assert not any(row[:5] == ["msd", "1000", "50", "0", "qptas"] for row in rows)
     assert shard.stat().st_mtime_ns == original_mtime
+
+
+@pytest.mark.parametrize("changed_setting", [None, "STOCHASTIC_MSD_STEP_SIZE", "STOCHASTIC_CVAR_STEP_SIZE"])
+def test_population_shell_rejects_old_optimizer_config(runner_env, changed_setting):
+    env = {**runner_env, "DRY_RUN": "1"}
+    initial = subprocess.run(["bash", str(POPULATION_RUNNER)], env=env, capture_output=True, text=True, timeout=60)
+    assert initial.returncode == 0, initial.stdout + initial.stderr
+    directory = Path(env["RESULT_DIR"])
+    config_path = directory / "run_config.env"
+    original = config_path.read_text()
+    if changed_setting is None:
+        # Old v2 configs omitted optimizer settings and used the Python defaults.
+        old_keys = {
+            "STOCHASTIC_ENTROPY_KAPPA",
+            "STOCHASTIC_SMOOTHING_TAU",
+            "STOCHASTIC_MSD_STEP_SIZE",
+            "STOCHASTIC_CVAR_STEP_SIZE",
+            "STOCHASTIC_STEP_DECAY",
+            "STOCHASTIC_LOGIT_BOUND",
+            "STOCHASTIC_JIT_UPDATES",
+        }
+        original = "".join(line + "\n" for line in original.splitlines() if line.split("=", 1)[0] not in old_keys)
+        config_path.write_text(original)
+    else:
+        env[changed_setting] = "1"
+    rejected = subprocess.run(["bash", str(POPULATION_RUNNER)], env=env, capture_output=True, text=True, timeout=60)
+    assert rejected.returncode == 2
+    assert "Configuration differs" in rejected.stderr
+    assert config_path.read_text() == original
+    assert not list(directory.glob("run_config.before_extension_*.env"))
 
 
 @pytest.mark.skipif(shutil.which("timeout") is None, reason="Requires GNU timeout")
@@ -379,6 +416,13 @@ def test_population_shell_runs_and_resumes_all_four_methods(runner_env, gamma):
                 assert row["total_pairs"] == "81"
                 assert (row["success"] == "True") == (float(row["eta"]) <= 0.01)
         else:
+            assert float(row["stochastic_entropy_kappa"]) == 0.01
+            assert float(row["stochastic_smoothing_tau"]) == 0.002
+            assert float(row["stochastic_step_size"]) == (1000 if row["risk"] == "msd" else 500)
+            assert row["stochastic_theta_step_size"] == ("" if row["risk"] == "msd" else "500.0")
+            assert float(row["stochastic_step_decay"]) == 0.5
+            assert float(row["stochastic_logit_bound"]) == 20
+            assert row["stochastic_jit_updates"] == "True"
             assert row["stochastic_certify_every"] == "1"
             assert row["stochastic_stagnation_window"] == "1"
             assert float(row["stochastic_stagnation_rtol"]) == 1

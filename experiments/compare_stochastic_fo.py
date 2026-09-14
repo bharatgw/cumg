@@ -117,6 +117,7 @@ def _method_config(
         max_iter=args.max_iter if max_iter is None else max_iter,
         batch_size=batch_size,
         step_size=args.step_size if step_size is None else step_size,
+        theta_step_size=getattr(args, "theta_step_size", None),
         step_decay=args.step_decay,
         seed=seed,
         logit_bound=optional_positive_float(args.logit_bound),
@@ -184,6 +185,7 @@ def _run_method(
             "tau": tau,
             "max_iter": max_iter,
             "step_size": step_size,
+            "theta_step_size": config.theta_step_size if config.theta_step_size is not None else step_size,
             "iteration_offset": iteration_offset,
             "stage_improvement": stage_improvement,
             "stage_relative_improvement": stage_relative_improvement,
@@ -258,6 +260,8 @@ def _method_metrics(
         f"{prefix}_objective": (float(result.objective) if result is not None else np.nan),
         f"{prefix}_iterations": total_iterations if stage_runs else result.iterations,
         f"{prefix}_has_profile": result is not None and result.x is not None and result.y is not None,
+        f"{prefix}_x": json.dumps(np.asarray(result.x).tolist()) if result is not None else "",
+        f"{prefix}_y": json.dumps(np.asarray(result.y).tolist()) if result is not None else "",
         f"{prefix}_history_len": total_history_len if stage_runs else len(result.history),
         f"{prefix}_best_residual_norm": float(best_iterate.get("residual_norm", np.nan)),
         f"{prefix}_best_objective": float(best_iterate.get("objective", np.nan)),
@@ -338,6 +342,7 @@ def _history_rows(
             "entropy_kappa": stage_run["kappa"],
             "smoothing_tau": stage_run["tau"],
             "step_size": stage_run["step_size"],
+            "theta_step_size": stage_run.get("theta_step_size", stage_run["step_size"]),
             "step_decay": args.step_decay,
             "max_iter": stage_run["max_iter"],
             "minibatch_size": stochastic_minibatch_size(args, K),
@@ -406,6 +411,7 @@ def run_instance(
         "smoothing_tau": stages[0][1],
         "max_iter": stages[0][2],
         "step_size": stages[0][3],
+        "theta_step_size": getattr(args, "theta_step_size", None),
         "minibatch_size": stochastic_minibatch_size(args, K),
         "step_decay": args.step_decay,
         "regret_tolerance": args.regret_tolerance,
@@ -484,21 +490,24 @@ def print_summary(rows: list[dict[str, Any]], risks: list[str], methods: list[st
 
 def iter_tuning_configs(args: argparse.Namespace) -> Iterator[argparse.Namespace]:
     _continuation_stages(args)
+    theta_step_sizes = getattr(args, "theta_step_size_grid", None) or [getattr(args, "theta_step_size", None)]
     if getattr(args, "continuation_kappa", None) is not None:
         step_sizes = args.step_size_grid or [args.step_size]
-        for step_size in step_sizes:
+        for step_size, theta_step_size in product(step_sizes, theta_step_sizes):
             config_args = argparse.Namespace(**vars(args))
             config_args.step_size = step_size
+            config_args.theta_step_size = theta_step_size
             yield config_args
         return
     kappas = args.entropy_kappa_grid or [args.entropy_kappa]
     taus = args.smoothing_tau_grid or [args.smoothing_tau]
     step_sizes = args.step_size_grid or [args.step_size]
-    for kappa, tau, step_size in product(kappas, taus, step_sizes):
+    for kappa, tau, step_size, theta_step_size in product(kappas, taus, step_sizes, theta_step_sizes):
         config_args = argparse.Namespace(**vars(args))
         config_args.entropy_kappa = kappa
         config_args.smoothing_tau = tau
         config_args.step_size = step_size
+        config_args.theta_step_size = theta_step_size
         yield config_args
 
 
@@ -510,7 +519,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--reps", type=int, default=3)
     parser.add_argument("--seed-base", type=int, default=123)
     parser.add_argument("--payoff-model", choices=PAYOFF_MODELS, default="uniform")
-    parser.add_argument("--jit-updates", action="store_true", help="Compile FO updates with JAX; timing includes compilation.")
+    parser.add_argument(
+        "--jit-updates", action="store_true", help="Compile FO updates with JAX; timing includes compilation."
+    )
     parser.add_argument("--gamma", type=float, default=0.5)
     parser.add_argument("--alpha", type=float, default=0.5)
     parser.add_argument("--entropy-kappa", type=float, default=0.2)
@@ -527,6 +538,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--batch-size", type=int, default=None)
     parser.add_argument("--step-size", type=float, default=0.2)
     parser.add_argument("--step-size-grid", type=float, nargs="+", default=None)
+    parser.add_argument(
+        "--theta-step-size", type=float, default=None, help="CVaR threshold learning rate; default shares --step-size."
+    )
+    parser.add_argument("--theta-step-size-grid", type=float, nargs="+", default=None)
     parser.add_argument("--step-decay", type=float, default=0.5)
     parser.add_argument("--logit-bound", type=float, default=20.0)
     parser.add_argument("--gradient-clip-norm", type=float, default=None)
@@ -606,7 +621,8 @@ def main() -> None:
                                     for method in args.methods
                                 ]
                                 print(
-                                    setting_text + f"step={config_args.step_size:g} "
+                                    setting_text
+                                    + f"step={config_args.step_size:g} theta_step={config_args.theta_step_size} "
                                     f"K={K:>3} n={n:>3} rep={rep:>2} " + " | ".join(method_parts)
                                 )
 

@@ -145,6 +145,22 @@ if [[ "$METHODS" == *stochastic_* ]] && (( STAGNATION_WINDOW > 0 )); then
   run_config+=$'\n'"STAGNATION_RTOL=$STAGNATION_RTOL"
   run_config+=$'\n'"STAGNATION_ATOL=$STAGNATION_ATOL"
 fi
+# Unset optimizer overrides retain the historical Python defaults and config
+# format. Persist every supplied override so retuned FO jobs cannot reuse old runs.
+if [[ "$METHODS" == *stochastic_* ]]; then
+  for setting in STOCHASTIC_ENTROPY_KAPPA STOCHASTIC_SMOOTHING_TAU \
+    STOCHASTIC_MSD_STEP_SIZE STOCHASTIC_CVAR_STEP_SIZE STOCHASTIC_STEP_DECAY \
+    STOCHASTIC_LOGIT_BOUND STOCHASTIC_JIT_UPDATES; do
+    if [[ -n "${!setting:-}" ]]; then
+      run_config+=$'\n'"$setting=${!setting}"
+      export "$setting"
+    fi
+  done
+  if [[ -n "${STOCHASTIC_JIT_UPDATES:-}" && "$STOCHASTIC_JIT_UPDATES" != 0 && "$STOCHASTIC_JIT_UPDATES" != 1 ]]; then
+    echo "STOCHASTIC_JIT_UPDATES must be 0 or 1." >&2
+    exit 2
+  fi
+fi
 
 if [[ -f "$CONFIG_FILE" ]]; then
   if [[ "$(cat "$CONFIG_FILE")" != "$run_config" ]]; then
@@ -322,6 +338,21 @@ xargs -n 6 -P "$WORKERS" bash -c '
   )
   if [[ -n "$EPSILON_SCR" ]]; then
     command+=(--epsilon-scr "$EPSILON_SCR")
+  fi
+  if [[ "$method" == stochastic_* ]]; then
+    [[ -z "${STOCHASTIC_ENTROPY_KAPPA:-}" ]] || command+=(--entropy-kappa "$STOCHASTIC_ENTROPY_KAPPA")
+    [[ -z "${STOCHASTIC_SMOOTHING_TAU:-}" ]] || command+=(--smoothing-tau "$STOCHASTIC_SMOOTHING_TAU")
+    [[ -z "${STOCHASTIC_STEP_DECAY:-}" ]] || command+=(--step-decay "$STOCHASTIC_STEP_DECAY")
+    [[ -z "${STOCHASTIC_LOGIT_BOUND:-}" ]] || command+=(--logit-bound "$STOCHASTIC_LOGIT_BOUND")
+    case "$risk" in
+      msd) step_size="${STOCHASTIC_MSD_STEP_SIZE:-}" ;;
+      cvar) step_size="${STOCHASTIC_CVAR_STEP_SIZE:-}" ;;
+    esac
+    [[ -z "$step_size" ]] || command+=(--step-size "$step_size")
+    # CVaR retains the selected shared learning rate for logits and thresholds.
+    if [[ "${STOCHASTIC_JIT_UPDATES:-0}" == 1 ]]; then
+      command+=(--jit-updates)
+    fi
   fi
   if [[ "$method" == "qptas" || "$method" == "qptas_screened" || "$method" == stochastic_* ]]; then
     # Numerical failures must produce retryable error markers, not completed CSV shards.

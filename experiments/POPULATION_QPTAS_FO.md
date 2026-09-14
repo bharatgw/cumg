@@ -4,6 +4,13 @@ Run `run_population_qptas_fo_remote.sh` for a separate campaign comparing sample
 QPTAS, screened QPTAS, full-batch stochastic FO, and mini-batch stochastic FO. It uses the existing
 method scheduler, locks, timeouts, and resume collector.
 
+The v2 defaults now use the MSD settings from the
+[FO parameter calibration](results/calibration/population_fo/pilot_v1/README.md)
+and the CVaR settings selected in the
+[follow-up pilot](results/calibration/population_fo/cvar_steps_v2/README.md).
+Both batch modes use the same settings within each risk. The pilots used
+separate game seeds; success on the full grid remains to be measured.
+
 | Setting | Default |
 | --- | --- |
 | Risks | MSD and CVaR |
@@ -17,8 +24,11 @@ method scheduler, locks, timeouts, and resume collector.
 | FO certification | At initialization, every 100 iterations, and at the iteration limit |
 | FO stagnation stopping | 500-iteration window; relative tolerance 0.005; absolute tolerance 1e-5 |
 | FO mini-batch size | ceil(sqrt(K)): 23, 32, 45, 64 |
-| FO entropy kappa / smoothing tau | 0.1 / 0.02 |
-| FO step size / decay / logit bound | 1.0 / 0.5 / 20 |
+| FO entropy kappa / smoothing tau | 0.01 / 0.002 for both risks and batch modes |
+| FO initial step size | MSD: 1000; CVaR: 500 |
+| FO step decay / logit bound | 0.5 / 20; step at update t is initial_step / sqrt(t), t >= 1 |
+| CVaR threshold step | Shared with the strategy step; no separate threshold rate |
+| FO JAX compilation | Enabled, as in the pilots; compilation time is included in method runtime |
 | QPTAS kappa | ceil(sqrt(50)) = 8 |
 | QPTAS candidate budget | Up to 1,000 distinct random joint kappa-uniform profiles |
 | Screened QPTAS candidate budget | Up to 1,000 distinct joint (x,q) pairs |
@@ -82,14 +92,16 @@ runner requires GNU `timeout`, as on Ubuntu.
 DRY_RUN=1 bash experiments/run_population_qptas_fo_remote.sh
 
 # Launch; use the same command to resume a stopped campaign.
-nohup bash experiments/run_population_qptas_fo_remote.sh >> population_runner_v2.log 2>&1 &
+nohup bash experiments/run_population_qptas_fo_remote.sh >> population_runner_v2_calibrated.log 2>&1 &
 
 # Monitor the launcher and per-method completion messages.
-tail -f population_runner_v2.log
+tail -f population_runner_v2_calibrated.log
 ```
 
 Default results go to
 `experiments/results/remote/population_qptas_fo/beta_uniform_v2/`.
+If that directory contains an older v2 configuration, follow the archive step
+below before launching with the calibrated settings.
 Use a separate directory for a small smoke test:
 
 ```bash
@@ -103,6 +115,14 @@ certification frequency, stagnation window/tolerances, candidate budget, epsilon
 gamma, alpha, seed base, cap, and result directory can be overridden using the script's environment
 variables. `STOCHASTIC_N_RANDOM_STARTS=4` means four additional starts (five
 total). `EPSILON` controls all methods' regret thresholds.
+FO optimizer overrides are `STOCHASTIC_ENTROPY_KAPPA`,
+`STOCHASTIC_SMOOTHING_TAU`, `STOCHASTIC_MSD_STEP_SIZE`,
+`STOCHASTIC_CVAR_STEP_SIZE`, `STOCHASTIC_STEP_DECAY`,
+`STOCHASTIC_LOGIT_BOUND`, and `STOCHASTIC_JIT_UPDATES` (1 enables compilation;
+0 disables it). These are saved in `run_config.env`. The step for the job's
+risk is passed to both FO batch modes. FO smoothing tau is separate from the
+screened QPTAS scenario denominator tau.
+
 `CERTIFY_EVERY=100` checks full-sample regret at initialization, every 100
 updates, and at the iteration limit, including in mini-batch mode. Each start
 gets a fresh iteration budget. The first successful certificate ends FO
@@ -125,18 +145,42 @@ random start, and its iteration/stagnation counters start afresh. Set
 lowest-regret certified profile with `success=False`. Both regret and stagnation
 decisions are made every 100 iterations with these defaults.
 
-Choose a new `VERSION` or `RESULT_DIR` whenever changing numerical settings. The runner
-rejects a conflicting saved configuration, and the collector rejects completed
+Use a fresh result directory whenever changing numerical settings, either by
+choosing another `VERSION`/`RESULT_DIR` or by archiving the old directory first.
+The runner rejects a conflicting saved configuration, and the collector rejects completed
 shards from a different payoff model. Legacy lookups stay inside the new
 campaign's empty `legacy/` directory, so old uniform-game results are not imported.
 
 The population runner permits **additions only** to `K_GRID` and `METHODS` within
-the same version. When upgrading an existing v2 directory to add K=500 and
+the same optimizer configuration. When extending a compatible v2 directory to add K=500 and
 `qptas_screened`, it archives the previous `run_config.env` as
 `run_config.before_extension_<timestamp>.env` and retains completed method shards.
 All other saved settings must match exactly. The planner adds the new tasks and
 retains unfinished old tasks. This also applies to a dry-run preview. Stop any
 previous runner and its workers before extending the campaign and relaunching.
+
+### Applying the calibrated settings while keeping v2
+
+The default remains `VERSION=beta_uniform_v2`. Older v2 runs used entropy 0.1,
+smoothing 0.02, and initial step 1. Those FO runs cannot be resumed under the
+calibrated configuration. After stopping the old launcher **and its workers**,
+archive the existing directory if it contains that old configuration:
+
+```bash
+campaign_dir=experiments/results/remote/population_qptas_fo/beta_uniform_v2
+mv "$campaign_dir" "${campaign_dir}_before_calibration_$(date -u +%Y%m%dT%H%M%SZ)"
+
+DRY_RUN=1 bash experiments/run_population_qptas_fo_remote.sh
+nohup bash experiments/run_population_qptas_fo_remote.sh >> population_runner_v2_calibrated.log 2>&1 &
+```
+
+Skip the `mv` if v2 has never been created. Keep the archived results and logs;
+do not delete or replace only `run_config.env`, which would leave old method
+shards available for reuse. The fresh directory schedules all 640 jobs. This
+does not import old QPTAS results automatically, although their configuration
+is unchanged. Subsequent launches with the same calibrated settings resume
+normally. Editing the local script does not change an already running remote
+process; the updated code must be copied to the server before relaunching.
 
 ### Switching from every-iteration checking
 
@@ -194,7 +238,8 @@ to sample strategy profiles directly without screening.
 
 ## Saved results
 
-- `run_config.env`: grid, methods, payoff model, solver budgets, and thresholds.
+- `run_config.env`: grid, methods, payoff model, solver budgets, thresholds,
+  and all supplied FO optimizer settings, including each risk's initial step.
 - `method_shards/`: one CSV per completed method run; JSON markers for errors
   and timeouts, with per-attempt logs under `logs/`.
 - `capped_method_results.csv`: collected at startup and when the runner ends.
@@ -206,6 +251,10 @@ to sample strategy profiles directly without screening.
   include all attempted starts.
 - `stochastic_stagnation_window`, `stochastic_stagnation_rtol`, and
   `stochastic_stagnation_atol`: the stopping settings recorded in completed rows.
+- FO rows record `stochastic_entropy_kappa`, `stochastic_smoothing_tau`,
+  `stochastic_step_size`, `stochastic_step_decay`, `stochastic_logit_bound`,
+  and `stochastic_jit_updates`. `stochastic_theta_step_size` records the shared
+  initial threshold step for CVaR and is empty for MSD.
 - QPTAS `profiles_checked`, `best_response_solves`, `termination_reason`: the
   work performed and why the sampled search stopped.
 - Screened QPTAS additionally records `total_pairs`, `screen_passes`, and

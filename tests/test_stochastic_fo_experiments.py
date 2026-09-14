@@ -70,6 +70,12 @@ def test_stochastic_fo_scalability_experiment_records_pairwise_metrics(risk, pay
         assert np.isnan(row["full_batch_theta2"])
     assert row["full_batch_has_profile"]
     assert row["minibatch_has_profile"]
+    for method in args.methods:
+        for player in ("x", "y"):
+            profile = np.asarray(json.loads(row[f"{method}_{player}"]))
+            assert profile.shape == (2,)
+            assert np.all(profile >= 0)
+            assert np.sum(profile) == pytest.approx(1.0)
     assert np.isfinite(row["full_batch_eta"])
     assert np.isfinite(row["minibatch_eta"])
     assert np.isfinite(row["time_ratio_minibatch_over_full_batch"])
@@ -111,9 +117,16 @@ def test_stochastic_fo_tuning_grid_and_history_rows(risk):
     configs = list(compare_stochastic_fo.iter_tuning_configs(args))
 
     assert len(configs) == 8
+    args.theta_step_size_grid = [0.0001, 0.001]
+    configs = list(compare_stochastic_fo.iter_tuning_configs(args))
+    assert len(configs) == 16
+    assert {config.theta_step_size for config in configs} == {0.0001, 0.001}
+    assert compare_stochastic_fo._method_config(configs[0], 2, 0, "full_batch").theta_step_size == 0.0001
     history_rows = []
     row = compare_stochastic_fo.run_instance(configs[0], risk, K=2, n=2, seed=0, history_callback=history_rows.append)
     assert row["full_batch_best_certificate_iteration"] == 0
+    assert row["theta_step_size"] == 0.0001
+    assert history_rows[0]["theta_step_size"] == 0.0001
     assert len(history_rows) == 5
     assert {r["start_index"] for r in history_rows} == set(range(5))
     assert all(r["start_iteration"] == 0 for r in history_rows)

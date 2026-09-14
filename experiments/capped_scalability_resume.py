@@ -48,6 +48,7 @@ COMMON_RESULT_FIELDS = (
     "stochastic_entropy_kappa",
     "stochastic_smoothing_tau",
     "stochastic_step_size",
+    "stochastic_theta_step_size",
     "stochastic_step_decay",
     "stochastic_logit_bound",
     "stochastic_gradient_clip_norm",
@@ -58,6 +59,7 @@ COMMON_RESULT_FIELDS = (
     "stochastic_stagnation_window",
     "stochastic_stagnation_rtol",
     "stochastic_stagnation_atol",
+    "stochastic_jit_updates",
 )
 
 METHOD_RESULT_FIELDS = (

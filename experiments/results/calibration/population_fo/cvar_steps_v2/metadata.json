@@ -1,0 +1,83 @@
+{
+  "purpose": "CVaR pilot of separately scaled strategy and threshold gradient steps",
+  "started_at_utc": "2026-09-14T05:40:56.013525+00:00",
+  "python": "3.12.11 (main, Jul 21 2025, 04:22:59) [Clang 17.0.0 (clang-1700.0.13.5)]",
+  "platform": "macOS-26.5.1-arm64-arm-64bit",
+  "packages": {
+    "numpy": "2.2.6",
+    "scipy": "1.16.1",
+    "jax": "0.10.2",
+    "jaxlib": "0.10.2"
+  },
+  "git_head": "7249a0c40d56a3d4a3123d07e8412850fa6dfa6b",
+  "source_sha256": {
+    "src/cumg/stochastic_fo.py": "81f00151b3f5ae73222c2487e5b6da1bdce6817ad8ebae273ca80d3c76afcfc5",
+    "src/cumg/small_support.py": "a19ee7f3b9a44ec583ff2de66f28677c8d2667b4e8f69f29146d366dfc185f33",
+    "experiments/compare_scalability_approaches.py": "01106c40dec96c495170f0c541cb1c158945353fa29b8a9d48289c695b620e67",
+    "experiments/compare_stochastic_fo.py": "7067cc423da0776773a343347ce9edb6ef568b5956c31964d9bad0e4cb955b85",
+    "experiments/calibrate_population_fo.sh": "7fb076c7ca67b8d9d93b995e63a301d787e266a119ed98ddaa925cb6087e1164",
+    "experiments/results/calibration/population_fo/cvar_steps_v2/check_stability.py": "77d3a26caa65b49a88c81902a2bbdf0b0f3289651c3fdcf534977e780617fd40",
+    "experiments/results/calibration/population_fo/pilot_v1/audit_certificates.py": "c2eb56f8e75ef85cab45736a71faa9a467dc50dc4ebb649c549a6060a40236f7"
+  },
+  "training_seed_base": 9323123,
+  "reserved_validation_seed_base": 9423123,
+  "previous_pilot_seed_bases": [
+    9123123,
+    9223123
+  ],
+  "campaign_seed_base": 123,
+  "payoff_model": "cell_beta_uniform_v1",
+  "gamma": 0.5,
+  "alpha": 0.5,
+  "n": 50,
+  "training_K": 500,
+  "target_regret": 0.01,
+  "max_iter_per_start": 2000,
+  "certify_every": 100,
+  "stagnation_window": 500,
+  "stagnation_rtol": 0.005,
+  "stagnation_atol": 1e-05,
+  "training_initial_starts": 1,
+  "validation_starts": 5,
+  "execution": "CPU with JIT updates. Separate phases may overlap; timings include compile time and are diagnostic.",
+  "notes": "theta_step_size is optional and defaults to the shared step. Both use the same step_decay. No paper/campaign results are modified.",
+  "interrupted_attempts": [
+    {
+      "at_utc": "2026-09-14T10:25:46.165916+00:00",
+      "reason": "Sessions no longer available; result files had zero completed rows, with partial histories last updated over four hours earlier. Rerun these cases.",
+      "preserved_files": [
+        "interrupted_20260914T102546Z/cvar_confirm_decay.csv",
+        "interrupted_20260914T102546Z/cvar_confirm_decay_history.csv",
+        "interrupted_20260914T102546Z/cvar_confirm_decay.log",
+        "interrupted_20260914T102546Z/cvar_confirm_constant.csv",
+        "interrupted_20260914T102546Z/cvar_confirm_constant_history.csv",
+        "interrupted_20260914T102546Z/cvar_confirm_constant.log"
+      ]
+    }
+  ],
+  "completed_at_utc": "2026-09-14T10:35:08.629640+00:00",
+  "completed_method_solves": 73,
+  "phases": [
+    "cvar_control",
+    "cvar_step_decay",
+    "cvar_step_constant",
+    "cvar_refine_decay",
+    "cvar_refine_constant",
+    "cvar_confirm_decay",
+    "cvar_confirm_constant",
+    "cvar_confirm_control",
+    "cvar_validate_500",
+    "cvar_validate_1000"
+  ],
+  "tests": {
+    "passed": 302,
+    "external_solver_tests_deselected": 15,
+    "ruff": "passed",
+    "shell_syntax": "passed"
+  },
+  "certification_auditor": "experiments/results/calibration/population_fo/pilot_v1/audit_certificates.py --result-dir experiments/results/calibration/population_fo/cvar_steps_v2 --phases cvar_confirm_decay cvar_confirm_constant cvar_confirm_control cvar_validate_500 cvar_validate_1000 --expected-profiles 30",
+  "certificate_audit": {
+    "profiles_checked": 30,
+    "maximum_independent_payoff_difference": 3.9968028886505635e-15
+  }
+}
