@@ -84,6 +84,9 @@ METHOD_RESULT_FIELDS = (
     "best_certificate_iteration",
     "profiles_checked",
     "total_profiles",
+    "total_pairs",
+    "screen_rejections",
+    "screen_passes",
     "best_response_solves",
     "sampling_seed",
     "termination_reason",
@@ -374,6 +377,35 @@ def record_status(args: argparse.Namespace) -> Path:
     return path
 
 
+def extend_run_config(path: Path, proposed: str) -> Path:
+    """Archive and replace a saved config only for additive K/method changes.
+
+    No experiment settings may change. Existing shards remain valid and are
+    left untouched; the regular planner schedules just the missing tasks.
+    """
+
+    original = path.read_text()
+    old = dict(line.split("=", 1) for line in original.splitlines())
+    new = dict(line.split("=", 1) for line in proposed.splitlines())
+    if old.keys() != new.keys():
+        raise ValueError("Configuration differs beyond an additive K_GRID/METHODS extension.")
+    for key, value in old.items():
+        if key in {"K_GRID", "METHODS"}:
+            valid = set(value.split()) <= set(new[key].split())
+        else:
+            valid = value == new[key]
+        if not valid:
+            raise ValueError(f"Configuration differs at {key}; use a new VERSION or RESULT_DIR.")
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+    archive = path.with_name(f"{path.stem}.before_extension_{stamp}{path.suffix}")
+    with archive.open("x") as f:
+        f.write(original)
+    tmp_path = path.with_suffix(path.suffix + ".tmp")
+    tmp_path.write_text(proposed.rstrip("\n") + "\n")
+    os.replace(tmp_path, path)
+    return archive
+
+
 def _add_grid_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--legacy-dir", type=Path, required=True)
     parser.add_argument("--result-dir", type=Path, required=True)
@@ -391,6 +423,10 @@ def _add_grid_arguments(parser: argparse.ArgumentParser) -> None:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
+
+    config_parser = subparsers.add_parser("extend-config", help="Allow only additive K-grid and method extensions.")
+    config_parser.add_argument("--config", type=Path, required=True)
+    config_parser.add_argument("--proposed", required=True)
 
     plan_parser = subparsers.add_parser("plan", help="Write unresolved method tasks to a TSV manifest.")
     _add_grid_arguments(plan_parser)
@@ -440,6 +476,12 @@ def main() -> None:
     elif args.command == "collect":
         counts = collect_results(args)
         print(f"Wrote {args.output}: {_format_counts(counts)}")
+    elif args.command == "extend-config":
+        try:
+            archive = extend_run_config(args.config, args.proposed)
+        except ValueError as exc:
+            raise SystemExit(str(exc)) from exc
+        print(f"Extended {args.config}; previous configuration saved to {archive}.")
     else:
         path = record_status(args)
         print(f"Wrote {path}")

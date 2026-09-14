@@ -148,9 +148,13 @@ fi
 
 if [[ -f "$CONFIG_FILE" ]]; then
   if [[ "$(cat "$CONFIG_FILE")" != "$run_config" ]]; then
-    echo "Configuration differs from $CONFIG_FILE." >&2
-    echo "Use a new VERSION or RESULT_DIR instead of mixing capped settings." >&2
-    exit 2
+    if [[ "${ALLOW_GRID_EXTENSION:-0}" == "1" ]]; then
+      "$PYTHON_BIN" "$RESUME_TOOL" extend-config --config "$CONFIG_FILE" --proposed "$run_config" || exit 2
+    else
+      echo "Configuration differs from $CONFIG_FILE." >&2
+      echo "Use a new VERSION or RESULT_DIR instead of mixing capped settings." >&2
+      exit 2
+    fi
   fi
 else
   printf '%s\n' "$run_config" > "$CONFIG_FILE"
@@ -319,7 +323,7 @@ xargs -n 6 -P "$WORKERS" bash -c '
   if [[ -n "$EPSILON_SCR" ]]; then
     command+=(--epsilon-scr "$EPSILON_SCR")
   fi
-  if [[ "$method" == "qptas" || "$method" == stochastic_* ]]; then
+  if [[ "$method" == "qptas" || "$method" == "qptas_screened" || "$method" == stochastic_* ]]; then
     # Numerical failures must produce retryable error markers, not completed CSV shards.
     command+=(--fail-on-error)
   fi

@@ -22,9 +22,11 @@ from cumg import (  # noqa: E402
     StochasticFOConfig,
     solve_cvar_mcp,
     solve_cvar_qptas,
+    solve_cvar_qptas_screened,
     solve_cvar_stochastic_fo,
     solve_msd_mcp,
     solve_msd_qptas,
+    solve_msd_qptas_screened,
     solve_msd_stochastic_fo,
 )
 from cumg.results import SupportSearchConfig  # noqa: E402
@@ -50,7 +52,7 @@ DEFAULT_METHODS = (
     "stochastic_full_batch",
     "stochastic_minibatch",
 )
-METHODS = (*DEFAULT_METHODS, "qptas")
+METHODS = (*DEFAULT_METHODS, "qptas", "qptas_screened")
 RISKS = ("msd", "cvar")
 PAYOFF_MODELS = ("uniform", "cell_beta_uniform_v1")
 # Versioned catalogue: IDs 0..3 are Beta(a, b); ID 4 is Uniform[0, 1].
@@ -247,16 +249,18 @@ def _empty_method_metrics(prefix: str, elapsed_s: float, error: str | None) -> d
         f"{prefix}_best_certificate_eta": np.nan,
         f"{prefix}_best_certificate_iteration": None,
     }
-    if prefix == "qptas":
+    if prefix in {"qptas", "qptas_screened"}:
         out.update(
             {
-                "qptas_profiles_checked": None,
-                "qptas_total_profiles": None,
-                "qptas_best_response_solves": None,
-                "qptas_sampling_seed": None,
-                "qptas_termination_reason": "error" if error is not None else None,
+                f"{prefix}_profiles_checked": None,
+                f"{prefix}_total_profiles": None,
+                f"{prefix}_best_response_solves": None,
+                f"{prefix}_sampling_seed": None,
+                f"{prefix}_termination_reason": "error" if error is not None else None,
             }
         )
+    if prefix == "qptas_screened":
+        out.update({f"{prefix}_{key}": None for key in ("total_pairs", "screen_rejections", "screen_passes")})
     if prefix in ("stochastic_full_batch", "stochastic_minibatch"):
         out.update(
             {
@@ -365,26 +369,30 @@ def _stochastic_result_metrics(prefix: str, result, elapsed_s: float, error: str
     return out
 
 
-def _qptas_result_metrics(result, elapsed_s: float) -> dict[str, Any]:
-    out = _empty_method_metrics("qptas", elapsed_s, None)
+def _qptas_result_metrics(result, elapsed_s: float, prefix: str = "qptas") -> dict[str, Any]:
+    out = _empty_method_metrics(prefix, elapsed_s, None)
     cert = result.certificate or {}
     regrets = cert.get("regrets", (np.nan, np.nan))
     out.update(
-        _certificate_metrics("qptas", {"eta": cert.get("eta", np.nan), "regret1": regrets[0], "regret2": regrets[1]})
+        _certificate_metrics(prefix, {"eta": cert.get("eta", np.nan), "regret1": regrets[0], "regret2": regrets[1]})
     )
     x, y = _profile_from_result(result)
     out.update(
         {
-            "qptas_success": result.success,
-            "qptas_has_profile": x is not None and y is not None,
-            "qptas_solver": "highs",
-            "qptas_profiles_checked": result.profiles_checked,
-            "qptas_total_profiles": result.total_profiles,
-            "qptas_best_response_solves": result.best_response_solves,
-            "qptas_sampling_seed": result.seed,
-            "qptas_termination_reason": result.termination_reason,
+            f"{prefix}_success": result.success,
+            f"{prefix}_has_profile": x is not None and y is not None,
+            f"{prefix}_solver": "highs",
+            f"{prefix}_profiles_checked": result.profiles_checked,
+            f"{prefix}_total_profiles": result.total_profiles,
+            f"{prefix}_best_response_solves": result.best_response_solves,
+            f"{prefix}_sampling_seed": result.seed,
+            f"{prefix}_termination_reason": result.termination_reason,
         }
     )
+    if prefix == "qptas_screened":
+        out.update(
+            {f"{prefix}_{key}": getattr(result, key) for key in ("total_pairs", "screen_rejections", "screen_passes")}
+        )
     return out
 
 
@@ -498,7 +506,7 @@ def _run_stochastic_method(method: str, risk: str, A, B, p, args: argparse.Names
 def _run_method(method: str, risk: str, A, B, p, args: argparse.Namespace, seed: int, support_config):
     start = perf_counter()
     try:
-        if method == "qptas":
+        if method in {"qptas", "qptas_screened"}:
             kwargs = {
                 "gamma": args.gamma,
                 "kappa": support_config.kappa,
@@ -506,11 +514,15 @@ def _run_method(method: str, risk: str, A, B, p, args: argparse.Namespace, seed:
                 "max_candidates": args.max_candidates,
                 "seed": seed,
             }
-            if risk == "msd":
-                result = solve_msd_qptas([A, B], p, **kwargs)
+            if method == "qptas_screened":
+                kwargs.update(tau=support_config.tau, epsilon_scr=support_config.epsilon_scr)
+                solve = solve_msd_qptas_screened if risk == "msd" else solve_cvar_qptas_screened
             else:
-                result = solve_cvar_qptas([A, B], p, alpha=args.alpha, **kwargs)
-            return result, _qptas_result_metrics(result, perf_counter() - start), None
+                solve = solve_msd_qptas if risk == "msd" else solve_cvar_qptas
+            if risk == "cvar":
+                kwargs["alpha"] = args.alpha
+            result = solve([A, B], p, **kwargs)
+            return result, _qptas_result_metrics(result, perf_counter() - start, method), None
         if method == "mcp":
             result, cert = _solve_mcp(risk, A, B, p, args)
             return (
@@ -779,7 +791,7 @@ def parse_args() -> argparse.Namespace:
         "--max-candidates",
         type=int,
         default=100,
-        help="Support-search budget, or number of distinct random joint profiles for qptas (kappa=ceil(sqrt(n))).",
+        help="Support-search budget, random profiles for qptas, or joint (x,q) pairs for qptas_screened.",
     )
     parser.add_argument("--n-screen-starts", type=int, default=1)
     parser.add_argument("--n-support-starts", type=int, default=5)

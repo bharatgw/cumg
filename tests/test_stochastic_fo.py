@@ -17,6 +17,35 @@ def assert_mixed_strategy(strategy):
     assert np.sum(strategy) == pytest.approx(1.0, abs=1e-10)
 
 
+@pytest.mark.parametrize("solver", [solve_msd_stochastic_fo, solve_cvar_stochastic_fo])
+@pytest.mark.parametrize("batch_size", [None, 2])
+def test_compiled_updates_match_eager_trajectory(solver, batch_size):
+    A, B = np.random.default_rng(7).random((2, 4, 3, 2))
+    config = StochasticFOConfig(
+        kappa=0.003,
+        tau=0.002,
+        max_iter=20,
+        batch_size=batch_size,
+        step_size=0.01,
+        seed=13,
+        x0=np.array([0.2, 0.3, 0.5]),
+        y0=np.array([0.7, 0.3]),
+        n_random_starts=0,
+        record_every=5,
+        certify_every=5,
+        regret_tolerance=0,
+    )
+    eager = solver(A, B, [0.1, 0.2, 0.3, 0.4], gamma=0.5, config=config)
+    compiled = solver(A, B, [0.1, 0.2, 0.3, 0.4], gamma=0.5, config=replace(config, jit_updates=True))
+    assert eager.iterations == compiled.iterations == 20
+    assert eager.termination_reason == compiled.termination_reason
+    for first, second in zip(eager.history, compiled.history, strict=True):
+        for key in ("x", "y", "eta", "objective", "residual_norm"):
+            np.testing.assert_allclose(first[key], second[key], rtol=1e-8, atol=1e-10)
+        if "theta" in first:
+            np.testing.assert_allclose(first["theta"], second["theta"], rtol=1e-8, atol=1e-10)
+
+
 def test_varphi_tau_is_stable_and_approximates_positive_part():
     values = varphi_tau(np.array([-3.0, 0.0, 2.0, 1000.0]), tau=1e-3)
 

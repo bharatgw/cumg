@@ -1,5 +1,6 @@
 import argparse
 import importlib.util
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -17,7 +18,8 @@ SPEC.loader.exec_module(compare_stochastic_fo)
 
 
 @pytest.mark.parametrize("risk", ["msd", "cvar"])
-def test_stochastic_fo_scalability_experiment_records_pairwise_metrics(risk):
+@pytest.mark.parametrize("payoff_model", ["uniform", "cell_beta_uniform_v1"])
+def test_stochastic_fo_scalability_experiment_records_pairwise_metrics(risk, payoff_model):
     args = argparse.Namespace(
         K=[2],
         n=[2],
@@ -45,11 +47,19 @@ def test_stochastic_fo_scalability_experiment_records_pairwise_metrics(risk):
         csv=None,
         history_csv=None,
         quiet=True,
+        payoff_model=payoff_model,
+        jit_updates=True,
     )
 
     row = compare_stochastic_fo.run_instance(args, risk, K=2, n=2, seed=0)
 
     assert row["risk"] == risk
+    assert row["payoff_model"] == payoff_model
+    assert row["jit_updates"]
+    assert row["payoff_numpy_version"] == np.__version__
+    if payoff_model == "cell_beta_uniform_v1":
+        *_, population_ids = compare_stochastic_fo.simulate_population_payoffs(K=2, n=2, seed=0)
+        np.testing.assert_array_equal(json.loads(row["payoff_population_ids"]), population_ids)
     if risk == "cvar":
         assert row["alpha"] == 1.0
         assert np.isfinite(row["full_batch_theta1"])

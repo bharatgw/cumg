@@ -8,7 +8,9 @@ from .qptas import (
     enumerate_kappa_uniform_strategies,
     sample_kappa_uniform_profiles,
     solve_cvar_qptas,
+    solve_cvar_qptas_screened,
     solve_msd_qptas,
+    solve_msd_qptas_screened,
 )
 from .results import QPTASResult, SolverConfig, SolverResult, SupportSearchConfig, SupportSearchResult
 from .small_support import (
@@ -44,9 +46,11 @@ __all__ = [
     "small_support_search_msd",
     "solve_cvar_mcp",
     "solve_cvar_qptas",
+    "solve_cvar_qptas_screened",
     "solve_cvar_stochastic_fo",
     "solve_msd_mcp",
     "solve_msd_qptas",
+    "solve_msd_qptas_screened",
     "solve_msd_stochastic_fo",
     "solve_pyomo_mcp_model",
     "solver_available",

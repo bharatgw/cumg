@@ -32,10 +32,12 @@ def qptas_args(monkeypatch):
 
 
 @pytest.mark.parametrize("risk", ["msd", "cvar"])
-def test_qptas_driver_uses_full_game_and_records_certificate(qptas_args, monkeypatch, risk):
+@pytest.mark.parametrize("method", ["qptas", "qptas_screened"])
+def test_qptas_driver_uses_full_game_and_records_certificate(qptas_args, monkeypatch, risk, method):
     args = qptas_args
+    args.methods = [method]
     args.epsilon = 1.0  # Every profile of this bounded game passes, exposing its certificate.
-    solve = getattr(driver, f"solve_{risk}_qptas")
+    solve = getattr(driver, f"solve_{risk}_{method}")
     captured = {}
 
     def capture(payoffs, p, **kwargs):
@@ -43,7 +45,7 @@ def test_qptas_driver_uses_full_game_and_records_certificate(qptas_args, monkeyp
         captured["result"] = solve(payoffs, p, **kwargs)
         return captured["result"]
 
-    monkeypatch.setattr(driver, f"solve_{risk}_qptas", capture)
+    monkeypatch.setattr(driver, f"solve_{risk}_{method}", capture)
     row = driver.run_instance(args, risk, K=4, n=3, seed=123)
     A, B, p = driver.simulate_random_payoffs(K=4, n=3, seed=123)
     np.testing.assert_array_equal(captured["payoffs"], [A, B])
@@ -55,22 +57,27 @@ def test_qptas_driver_uses_full_game_and_records_certificate(qptas_args, monkeyp
         "max_candidates": 3,
         "seed": 123,
         **({"alpha": 0.5} if risk == "cvar" else {}),
+        **({"tau": 4, "epsilon_scr": 2 / 3} if method == "qptas_screened" else {}),
     }
     x, y = driver._profile_from_result(captured["result"])
     if risk == "msd":
         cert = full_msd_regret(A, B, p, args.gamma, x, y)
     else:
         cert = full_cvar_regret(A, B, p, args.gamma, args.alpha, x, y)
-    assert row["qptas_success"]
-    assert row["qptas_has_profile"]
-    assert row["qptas_error"] is None
-    assert row["qptas_termination_reason"] == "epsilon_reached"
-    assert row["qptas_profiles_checked"] == 1
-    assert row["qptas_total_profiles"] == 36
-    assert row["qptas_best_response_solves"] == 2
-    assert row["qptas_sampling_seed"] == 123
+    assert row[f"{method}_success"]
+    assert row[f"{method}_has_profile"]
+    assert row[f"{method}_error"] is None
+    assert row[f"{method}_termination_reason"] == "epsilon_reached"
+    assert row[f"{method}_profiles_checked"] == 1
+    assert row[f"{method}_total_profiles"] == 36
+    assert row[f"{method}_best_response_solves"] == 2
+    assert row[f"{method}_sampling_seed"] == 123
+    if method == "qptas_screened":
+        assert row[f"{method}_total_pairs"] == 36 * 35**2
+        assert row[f"{method}_screen_passes"] == 1
+        assert row[f"{method}_screen_rejections"] == 0
     for key in ("eta", "regret1", "regret2"):
-        assert row[f"qptas_{key}"] == pytest.approx(cert[key], abs=1e-10)
+        assert row[f"{method}_{key}"] == pytest.approx(cert[key], abs=1e-10)
 
 
 @pytest.mark.parametrize("risk", ["msd", "cvar"])
@@ -91,20 +98,22 @@ def test_qptas_driver_records_exhaustion(qptas_args, monkeypatch, risk, budget, 
     assert checked <= row["qptas_best_response_solves"] <= 2 * checked
 
 
-def test_qptas_error_rows_have_stable_csv_schema(qptas_args, monkeypatch, tmp_path):
-    solve = driver.solve_msd_qptas
+@pytest.mark.parametrize("method", ["qptas", "qptas_screened"])
+def test_qptas_error_rows_have_stable_csv_schema(qptas_args, monkeypatch, tmp_path, method):
+    qptas_args.methods = [method]
+    solve = getattr(driver, f"solve_msd_{method}")
 
     def fail(*args, **kwargs):
         raise RuntimeError("LP failed")
 
-    monkeypatch.setattr(driver, "solve_msd_qptas", fail)
+    monkeypatch.setattr(driver, f"solve_msd_{method}", fail)
     failed = driver.run_instance(qptas_args, "msd", K=2, n=2, seed=123)
-    monkeypatch.setattr(driver, "solve_msd_qptas", solve)
+    monkeypatch.setattr(driver, f"solve_msd_{method}", solve)
     qptas_args.epsilon = 1.0
     passed = driver.run_instance(qptas_args, "msd", K=2, n=2, seed=123)
-    assert failed["qptas_termination_reason"] == "error"
-    assert failed["qptas_error"] == "LP failed"
-    assert passed["qptas_success"]
+    assert failed[f"{method}_termination_reason"] == "error"
+    assert failed[f"{method}_error"] == "LP failed"
+    assert passed[f"{method}_success"]
     assert failed.keys() == passed.keys()
     path = tmp_path / "rows.csv"
     with driver.StreamingCsvWriter(path) as writer:
@@ -135,6 +144,7 @@ def test_qptas_is_opt_in_for_existing_driver(monkeypatch):
     args = driver.parse_args()
     assert args.methods == list(driver.DEFAULT_METHODS)
     assert "qptas" not in args.methods
+    assert "qptas_screened" not in args.methods
     assert not args.fail_on_error
     assert args.payoff_model == "uniform"
 
@@ -185,7 +195,7 @@ def test_population_driver_shares_all_samples_across_methods(qptas_args, monkeyp
     pytest.importorskip("jax")
     args = qptas_args
     args.payoff_model = "cell_beta_uniform_v1"
-    args.methods = ["qptas", "stochastic_full_batch", "stochastic_minibatch"]
+    args.methods = ["qptas", "qptas_screened", "stochastic_full_batch", "stochastic_minibatch"]
     args.max_iter = 0
     args.certify_every = 1
     args.epsilon = 1
@@ -202,7 +212,7 @@ def test_population_driver_shares_all_samples_across_methods(qptas_args, monkeyp
     for game in games:
         for actual, expected in zip(game, (A, B, p), strict=True):
             np.testing.assert_array_equal(actual, expected)
-    assert len(games) == 3
+    assert len(games) == 4
     assert row["payoff_model"] == args.payoff_model
     assert json.loads(row["payoff_populations"]) == list(driver.PAYOFF_POPULATIONS)
     np.testing.assert_array_equal(json.loads(row["payoff_population_ids"]), populations)
@@ -265,12 +275,12 @@ def test_population_shell_default_plan(runner_env):
     assert result.returncode == 0, result.stdout + result.stderr
     directory = Path(runner_env["RESULT_DIR"])
     rows = [line.split("\t") for line in (directory / "pending_methods.tsv").read_text().splitlines()]
-    assert len(rows) == 360
+    assert len(rows) == 640
     assert {row[0] for row in rows} == {"msd", "cvar"}
-    assert {int(row[1]) for row in rows} == {1000, 2000, 4000}
+    assert {int(row[1]) for row in rows} == {500, 1000, 2000, 4000}
     assert {int(row[2]) for row in rows} == {50}
     assert {int(row[3]) for row in rows} == set(range(20))
-    assert {row[4] for row in rows} == {"qptas", "stochastic_full_batch", "stochastic_minibatch"}
+    assert {row[4] for row in rows} == {"qptas", "qptas_screened", "stochastic_full_batch", "stochastic_minibatch"}
     for risk, K, n, rep, _, seed in rows:
         assert int(seed) == driver.experiment_seed(risk, int(K), int(n), int(rep), 123)
     config = set((directory / "run_config.env").read_text().splitlines())
@@ -282,7 +292,7 @@ def test_population_shell_default_plan(runner_env):
         "MAX_ITER=2000",
         "MAX_CANDIDATES=1000",
         "WORKERS=8",
-        "CERTIFY_EVERY=1",
+        "CERTIFY_EVERY=100",
         "STAGNATION_WINDOW=500",
         "STAGNATION_RTOL=0.005",
         "STAGNATION_ATOL=0.00001",
@@ -291,10 +301,41 @@ def test_population_shell_default_plan(runner_env):
         "METHOD_TIME_LIMIT_SECONDS=86400",
     } <= config
 
+    # Simulate a saved pre-extension v2 config plus a completed original-method
+    # shard. Replanning must add the method/K cells without rerunning that shard.
+    config_path = directory / "run_config.env"
+    previous_config = (
+        config_path.read_text()
+        .replace("K_GRID=500 1000", "K_GRID=1000")
+        .replace("METHODS=qptas qptas_screened ", "METHODS=qptas ")
+    )
+    config_path.write_text(previous_config)
+    shard = directory / "method_shards/qptas/msd_K1000_n50_rep000__qptas.csv"
+    shard.parent.mkdir(parents=True)
+    shard.write_text("payoff_model,qptas_time_s,qptas_success,qptas_eta\ncell_beta_uniform_v1,1,True,0.005\n")
+    original_mtime = shard.stat().st_mtime_ns
+    expanded = subprocess.run(
+        ["bash", str(POPULATION_RUNNER)],
+        env={**runner_env, "DRY_RUN": "1"},
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert expanded.returncode == 0, expanded.stdout + expanded.stderr
+    archives = list(directory.glob("run_config.before_extension_*.env"))
+    assert len(archives) == 1
+    assert archives[0].read_text() == previous_config
+    rows = [line.split("\t") for line in (directory / "pending_methods.tsv").read_text().splitlines()]
+    assert len(rows) == 639
+    assert sum(row[4] == "qptas_screened" for row in rows) == 160
+    assert sum(row[1] == "500" for row in rows) == 160
+    assert not any(row[:5] == ["msd", "1000", "50", "0", "qptas"] for row in rows)
+    assert shard.stat().st_mtime_ns == original_mtime
+
 
 @pytest.mark.skipif(shutil.which("timeout") is None, reason="Requires GNU timeout")
 @pytest.mark.parametrize("gamma", [0.5, -1])
-def test_population_shell_runs_and_resumes_all_three_methods(runner_env, gamma):
+def test_population_shell_runs_and_resumes_all_four_methods(runner_env, gamma):
     pytest.importorskip("jax")
     env = {
         **runner_env,
@@ -315,7 +356,13 @@ def test_population_shell_runs_and_resumes_all_three_methods(runner_env, gamma):
     directory = Path(env["RESULT_DIR"])
     with (directory / "capped_method_results.csv").open(newline="") as f:
         rows = list(csv.DictReader(f))
-    assert len(rows) == 6
+    assert len(rows) == 8
+    assert {row["method"] for row in rows} == {
+        "qptas",
+        "qptas_screened",
+        "stochastic_full_batch",
+        "stochastic_minibatch",
+    }
     for row in rows:
         if gamma < 0:
             assert row["status"] == "error" and row["success"] == "False"
@@ -324,8 +371,13 @@ def test_population_shell_runs_and_resumes_all_three_methods(runner_env, gamma):
         assert row["payoff_model"] == "cell_beta_uniform_v1"
         *_, populations = driver.simulate_population_payoffs(K=2, n=2, seed=int(row["seed"]))
         np.testing.assert_array_equal(json.loads(row["payoff_population_ids"]), populations)
-        if row["method"] == "qptas":
+        if row["method"] in {"qptas", "qptas_screened"}:
             assert 1 <= int(row["profiles_checked"]) <= 2
+            if row["method"] == "qptas_screened":
+                assert int(row["screen_rejections"]) + int(row["screen_passes"]) == int(row["profiles_checked"])
+                assert int(row["screen_passes"]) <= int(row["best_response_solves"]) <= 2 * int(row["screen_passes"])
+                assert row["total_pairs"] == "81"
+                assert (row["success"] == "True") == (float(row["eta"]) <= 0.01)
         else:
             assert row["stochastic_certify_every"] == "1"
             assert row["stochastic_stagnation_window"] == "1"

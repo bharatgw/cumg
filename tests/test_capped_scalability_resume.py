@@ -42,6 +42,44 @@ def write_row(path, row):
         writer.writerow(row)
 
 
+@pytest.mark.parametrize(
+    "change,allowed",
+    [
+        ({"K_GRID": "500 1000 2000", "METHODS": "qptas qptas_screened stochastic_full_batch"}, True),
+        ({"K_GRID": "500"}, False),
+        ({"METHODS": "qptas_screened"}, False),
+        ({"CERTIFY_EVERY": "1"}, False),
+        ({"EPSILON": "0.1"}, False),
+        ({"SEED_BASE": "42"}, False),
+        ({"MAX_ITER": "3000"}, False),
+        ({"STAGNATION_WINDOW": "600"}, False),
+    ],
+)
+def test_config_extension_only_adds_grid_cells_and_methods(tmp_path, change, allowed):
+    original = {
+        "K_GRID": "1000 2000",
+        "METHODS": "qptas stochastic_full_batch",
+        "CERTIFY_EVERY": "100",
+        "EPSILON": "0.01",
+        "SEED_BASE": "123",
+        "MAX_ITER": "2000",
+        "STAGNATION_WINDOW": "500",
+    }
+    path = tmp_path / "run_config.env"
+    text = "".join(f"{key}={value}\n" for key, value in original.items())
+    path.write_text(text)
+    proposed = "".join(f"{key}={value}\n" for key, value in (original | change).items())
+    if allowed:
+        archive = capped_scalability_resume.extend_run_config(path, proposed)
+        assert archive.read_text() == text
+        assert path.read_text() == proposed
+    else:
+        with pytest.raises(ValueError, match="Configuration differs"):
+            capped_scalability_resume.extend_run_config(path, proposed)
+        assert path.read_text() == text
+        assert list(tmp_path.glob("*.env")) == [path]
+
+
 def test_restart_campaign_does_not_reuse_uniform_only_legacy_results(tmp_path):
     args = grid_args(tmp_path, ["stochastic_full_batch"])
     args.stochastic_n_random_starts = 4

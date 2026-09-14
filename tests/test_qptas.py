@@ -12,9 +12,13 @@ from cumg import (
     enumerate_kappa_uniform_strategies,
     sample_kappa_uniform_profiles,
     solve_cvar_qptas,
+    solve_cvar_qptas_screened,
     solve_msd_qptas,
+    solve_msd_qptas_screened,
 )
 from cumg.small_support import full_cvar_regret, full_msd_regret
+
+SCREENED_SOLVERS = [solve_msd_qptas_screened, solve_cvar_qptas_screened]
 
 
 @pytest.mark.parametrize("n,kappa", [(1, 4), (2, 1), (2, 3), (3, 2), (4, 3)])
@@ -138,6 +142,179 @@ def test_sampling_large_denominator_does_not_scan_all_counts():
             np.testing.assert_allclose(strategy * 10**9, np.rint(strategy * 10**9), atol=1e-6)
 
 
+def test_sampling_with_different_denominators_covers_product_grid():
+    sizes, kappas = (2, 3, 1), (3, 2, 5)
+    grids = [list(enumerate_kappa_uniform_strategies(n, k)) for n, k in zip(sizes, kappas, strict=True)]
+    expected = {tuple(tuple(x) for x in profile) for profile in product(*grids)}
+    samples = list(sample_kappa_uniform_profiles(sizes, kappas, 100, seed=3))
+    assert len(samples) == len(expected)
+    assert {tuple(tuple(x) for x in profile) for profile in samples} == expected
+    repeated = list(sample_kappa_uniform_profiles(sizes, kappas, 5, seed=3))
+    for first, second in zip(samples[:5], repeated, strict=True):
+        for x, y in zip(first, second, strict=True):
+            np.testing.assert_array_equal(x, y)
+
+
+@pytest.mark.parametrize("kappas", [(1,), (1, 2, 3), (1, 0), (1, 2.5), (1, True)])
+def test_sampling_rejects_invalid_per_player_denominators(kappas):
+    with pytest.raises(ValueError, match="kappa"):
+        list(sample_kappa_uniform_profiles((2, 3), kappas, 2))
+
+
+@pytest.mark.parametrize("solver", SCREENED_SOLVERS)
+def test_screened_defaults_support_rectangular_multiplayer_games(solver):
+    sizes = (1, 3, 5)
+    tensors = [np.zeros((7, *sizes)) for _ in sizes]
+    result = solver(tensors, gamma=[0.0, 0.5, 1.0], seed=7)
+    assert result.success
+    assert result.kappa == (1, 2, 3)
+    assert result.tau == 5
+    assert result.epsilon_scr == pytest.approx(2 * 0.01 / 3)
+    assert result.max_candidates == 1000
+    assert result.profiles_checked == result.screen_passes == 1
+    assert result.screen_rejections == 0
+    assert result.best_response_solves == 3
+    assert result.total_profiles == comb(4, 2) * comb(7, 4)
+    assert result.total_pairs == result.total_profiles * comb(11, 6) ** 3
+    for strategy, k in zip(result.strategies, result.kappa, strict=True):
+        np.testing.assert_allclose(strategy.sum(), 1)
+        np.testing.assert_allclose(strategy * k, np.rint(strategy * k))
+    for q in result.screening_distributions:
+        assert len(q) == 7
+        np.testing.assert_allclose(q.sum(), 1)
+        np.testing.assert_allclose(q * 5, np.rint(q * 5))
+
+
+@pytest.mark.parametrize("solver", SCREENED_SOLVERS)
+def test_failed_screen_retries_same_equilibrium_with_different_q(monkeypatch, solver):
+    # There is only one action, hence every x is an equilibrium. q is not
+    # constrained to U={p} at gamma=0; the first q nevertheless rejects x.
+    pairs = [(np.ones(1), np.array([0.0, 1.0])), (np.ones(1), np.array([1.0, 0.0]))]
+    monkeypatch.setattr(qptas, "sample_kappa_uniform_profiles", lambda *a, **kw: iter(pairs))
+    result = solver([np.array([[0.0], [2.0]])], [0.5, 0.5], gamma=0, max_candidates=2)
+    assert result.success
+    assert result.profiles_checked == 2
+    assert result.screen_rejections == result.screen_passes == result.best_response_solves == 1
+    assert result.certificate["eta"] == 0
+    assert result.certificate["current_values"] == (1.0,)
+    np.testing.assert_array_equal(result.screening_distributions[0], [1, 0])
+
+
+@pytest.mark.parametrize("risk", ["msd", "cvar"])
+def test_screen_pass_requires_full_lp_with_all_samples_and_original_weights(monkeypatch, risk):
+    # The optimistic screen sees only a zero-payoff state. A different state
+    # supplies a profitable deviation. Zero-probability rows still reach the LP.
+    payoffs = np.array([[0.0, 0.0], [0.0, 2.0], [0.0, 999.0]])
+    pair = (np.array([1.0, 0.0]), np.array([1.0, 0.0, 0.0]))
+    monkeypatch.setattr(qptas, "sample_kappa_uniform_profiles", lambda *a, **kw: iter([pair]))
+    lp_name = f"_maximize_{risk}_on_simplex"
+    lp = getattr(qptas, lp_name)
+    calls = []
+
+    def capture(values, probabilities, *parameters):
+        np.testing.assert_array_equal(values, payoffs)
+        np.testing.assert_array_equal(probabilities, [0.5, 0.5, 0])
+        calls.append(True)
+        return lp(values, probabilities, *parameters)
+
+    monkeypatch.setattr(qptas, lp_name, capture)
+    result = getattr(qptas, f"solve_{risk}_qptas_screened")(
+        [payoffs], [5, 5, 0], gamma=0.5, epsilon=0.01, max_candidates=1
+    )
+    assert calls == [True]
+    assert not result.success
+    assert result.screen_passes == result.best_response_solves == 1
+    assert result.screen_rejections == 0
+    assert result.termination_reason == "sample_exhausted"
+    assert result.strategies is result.certificate is None
+
+
+@pytest.mark.parametrize("solver", SCREENED_SOLVERS)
+def test_screen_checks_every_player_before_any_lp(monkeypatch, solver):
+    # Player 0 passes, player 1 fails: neither player's LP may be solved.
+    pair = (np.array([1.0, 0.0]),) * 2 + (np.ones(1),) * 2
+    monkeypatch.setattr(qptas, "sample_kappa_uniform_profiles", lambda *a, **kw: iter([pair]))
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("Rejected screen must skip every best-response LP.")
+
+    monkeypatch.setattr(qptas, "_maximize_msd_on_simplex", forbidden)
+    monkeypatch.setattr(qptas, "_maximize_cvar_on_simplex", forbidden)
+    result = solver([np.zeros((1, 2, 2)), np.array([[[0.0, 1.0], [0.0, 1.0]]])], max_candidates=1)
+    assert not result.success
+    assert result.screen_rejections == 1
+    assert result.screen_passes == result.best_response_solves == 0
+
+
+@pytest.mark.parametrize("solver", SCREENED_SOLVERS)
+def test_screen_uses_each_players_own_q(monkeypatch, solver):
+    A = np.array([[[0.0, 0.0], [1.0, 1.0]], [[0.0, 0.0], [0.0, 0.0]]])
+    B = np.array([[[0.0, 0.0], [0.0, 0.0]], [[0.0, 1.0], [0.0, 1.0]]])
+    pair = (np.array([1.0, 0.0]),) * 2 + (np.array([0.0, 1.0]), np.array([1.0, 0.0]))
+    monkeypatch.setattr(qptas, "sample_kappa_uniform_profiles", lambda *a, **kw: iter([pair]))
+    result = solver([A, B], gamma=0.0, epsilon=0.5, max_candidates=1)
+    assert result.success
+    assert result.screen_passes == 1
+    assert result.certificate["regrets"] == (0.5, 0.5)
+
+
+@pytest.mark.parametrize("risk", ["msd", "cvar"])
+def test_screened_certificate_matches_full_regret_and_stops_immediately(risk):
+    A, B = np.random.default_rng(7).random((2, 4, 2, 3))
+    p = [0.1, 0.2, 0.3, 0.4]
+    result = getattr(qptas, f"solve_{risk}_qptas_screened")([A, B], p, gamma=0.7, epsilon=1, seed=0)
+    assert result.success
+    assert result.profiles_checked == result.screen_passes == 1
+    assert result.best_response_solves == 2
+    if risk == "msd":
+        cert = full_msd_regret(A, B, p, 0.7, *result.strategies)
+    else:
+        cert = full_cvar_regret(A, B, p, 0.7, 0.5, *result.strategies)
+    assert result.certificate["eta"] == pytest.approx(cert["eta"], abs=1e-9)
+    np.testing.assert_allclose(result.certificate["regrets"], [cert["regret1"], cert["regret2"]], atol=1e-9)
+
+
+@pytest.mark.parametrize("solver", SCREENED_SOLVERS)
+def test_screened_pair_grid_exhaustion_has_no_false_certificate(solver):
+    A, B, p = matching_pennies_game()
+    result = solver([A, B], p, kappa=1, tau=1, max_candidates=1000)
+    assert not result.success
+    assert result.termination_reason == "pair_grid_exhausted"
+    assert result.profiles_checked == result.total_pairs
+    assert result.screen_rejections == result.profiles_checked
+    assert result.best_response_solves == 0
+    assert result.certificate is result.strategies is None
+
+
+@pytest.mark.parametrize("solver", SCREENED_SOLVERS)
+@pytest.mark.parametrize(
+    "options,match",
+    [
+        ({"kappa": (1, 2)}, "kappa"),
+        ({"tau": 0}, "tau"),
+        ({"tau": 1.5}, "tau"),
+        ({"epsilon_scr": -1}, "epsilon_scr"),
+        ({"epsilon_scr": np.nan}, "epsilon_scr"),
+        ({"max_candidates": None}, "max_candidates"),
+        ({"max_candidates": 0}, "max_candidates"),
+        ({"seed": True}, "seed"),
+    ],
+)
+def test_screened_invalid_options_raise(solver, options, match):
+    with pytest.raises(ValueError, match=match):
+        solver([np.zeros((2, 2))], **options)
+
+
+@pytest.mark.parametrize("risk", ["msd", "cvar"])
+def test_screened_lp_errors_propagate(monkeypatch, risk):
+    def failure(*args, **kwargs):
+        raise RuntimeError("LP failed")
+
+    monkeypatch.setattr(qptas, f"_maximize_{risk}_on_simplex", failure)
+    with pytest.raises(RuntimeError, match="LP failed"):
+        getattr(qptas, f"solve_{risk}_qptas_screened")([np.zeros((2, 2))])
+
+
 @pytest.mark.parametrize("solver", [solve_msd_qptas, solve_cvar_qptas])
 def test_sample_exhaustion_does_not_claim_entire_grid_failed(solver):
     A, B, p = matching_pennies_game()
@@ -259,7 +436,7 @@ def test_all_samples_and_nonuniform_zero_probability_weights_are_used(solver):
     assert result.certificate["eta"] == pytest.approx(0.0, abs=1e-8)
 
 
-@pytest.mark.parametrize("solver", [solve_msd_qptas, solve_cvar_qptas])
+@pytest.mark.parametrize("solver", [solve_msd_qptas, solve_cvar_qptas, *SCREENED_SOLVERS])
 def test_three_player_rectangular_game_with_mixed_equilibrium(solver):
     # Players 0 and 1 play matching pennies, scaled by player 2's action.
     # Player 1 also has a dominated third action. Player 2 hedges two scenarios.

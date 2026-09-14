@@ -22,11 +22,14 @@ for import_path in (SRC, EXPERIMENTS):
         sys.path.insert(0, str(import_path))
 
 from compare_scalability_approaches import (  # noqa: E402
+    PAYOFF_MODELS,
+    PAYOFF_POPULATIONS,
     RISKS,
     StreamingCsvWriter,
     experiment_seed,
     optional_positive_float,
     optional_positive_int,
+    simulate_population_payoffs,
     simulate_random_payoffs,
     stochastic_minibatch_size,
 )
@@ -125,6 +128,7 @@ def _method_config(
         certify_every=optional_positive_int(args.certify_every),
         regret_tolerance=args.regret_tolerance,
         n_random_starts=getattr(args, "n_random_starts", 4),
+        jit_updates=getattr(args, "jit_updates", False),
         stagnation_window=optional_positive_int(getattr(args, "stagnation_window", None)),
         stagnation_rtol=getattr(args, "stagnation_rtol", 0.0),
         stagnation_atol=getattr(args, "stagnation_atol", 0.0),
@@ -375,12 +379,27 @@ def run_instance(
     if risk not in RISKS:
         raise ValueError(f"risk must be one of {RISKS}; got {risk!r}.")
     stages = _continuation_stages(args)
-    A, B, p = simulate_random_payoffs(K=K, n=n, seed=seed, low=args.low, high=args.high)
+    payoff_model = getattr(args, "payoff_model", "uniform")
+    population_ids = None
+    if payoff_model == "uniform":
+        A, B, p = simulate_random_payoffs(K=K, n=n, seed=seed, low=args.low, high=args.high)
+    elif payoff_model == "cell_beta_uniform_v1":
+        if args.low != 0.0 or args.high != 1.0:
+            raise ValueError("cell_beta_uniform_v1 requires low=0 and high=1.")
+        A, B, p, population_ids = simulate_population_payoffs(K=K, n=n, seed=seed)
+    else:
+        raise ValueError(f"Unknown payoff model: {payoff_model}")
     row: dict[str, Any] = {
         "risk": risk,
         "K": K,
         "n": n,
         "seed": seed,
+        "payoff_model": payoff_model,
+        "payoff_populations": json.dumps(PAYOFF_POPULATIONS) if population_ids is not None else "",
+        "payoff_population_ids": json.dumps(population_ids.tolist()) if population_ids is not None else "",
+        "payoff_numpy_version": np.__version__,
+        "jit_updates": getattr(args, "jit_updates", False),
+        "logit_bound": args.logit_bound,
         "gamma": args.gamma,
         "alpha": args.alpha if risk == "cvar" else np.nan,
         "entropy_kappa": stages[0][0],
@@ -490,6 +509,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--n", type=int, nargs="+", default=[5, 10])
     parser.add_argument("--reps", type=int, default=3)
     parser.add_argument("--seed-base", type=int, default=123)
+    parser.add_argument("--payoff-model", choices=PAYOFF_MODELS, default="uniform")
+    parser.add_argument("--jit-updates", action="store_true", help="Compile FO updates with JAX; timing includes compilation.")
     parser.add_argument("--gamma", type=float, default=0.5)
     parser.add_argument("--alpha", type=float, default=0.5)
     parser.add_argument("--entropy-kappa", type=float, default=0.2)

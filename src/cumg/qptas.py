@@ -1,4 +1,4 @@
-"""Exhaustive or sampled kappa-uniform search with full-sample regret checks."""
+"""Exhaustive or sampled kappa-uniform search, with optional scenario screening."""
 
 from __future__ import annotations
 
@@ -16,6 +16,7 @@ from .small_support import (
     _keep_current_strategy_if_better,
     _maximize_cvar_on_simplex,
     _maximize_msd_on_simplex,
+    support_sizes,
 )
 from .validation import normalize_probabilities
 
@@ -24,6 +25,15 @@ def _positive_integer(value: int, name: str) -> int:
     if isinstance(value, (bool, np.bool_)) or not isinstance(value, (int, np.integer)) or value <= 0:
         raise ValueError(f"{name} must be a positive integer.")
     return int(value)
+
+
+def _profile_denominators(kappa: int | Sequence[int], m: int) -> tuple[int, ...]:
+    if np.isscalar(kappa) or kappa is None:
+        return (_positive_integer(kappa, "kappa"),) * m
+    denominators = tuple(_positive_integer(k, "kappa") for k in kappa)
+    if len(denominators) != m:
+        raise ValueError(f"kappa must be a scalar or a sequence of length {m}.")
+    return denominators
 
 
 def enumerate_kappa_uniform_strategies(n: int, kappa: int) -> Iterator[np.ndarray]:
@@ -102,7 +112,7 @@ def _kappa_uniform_strategy_from_rank(n: int, kappa: int, rank: int) -> np.ndarr
 
 def sample_kappa_uniform_profiles(
     action_sizes: Sequence[int],
-    kappa: int,
+    kappa: int | Sequence[int],
     n_samples: int,
     seed: int | None = 0,
 ) -> Iterator[tuple[np.ndarray, ...]]:
@@ -117,19 +127,20 @@ def sample_kappa_uniform_profiles(
     without enumerating preceding profiles. Python integers support grids larger
     than 64-bit limits. Storage grows with the number of profiles drawn, not the
     total grid size. Increasing n_samples with the same seed extends the prefix.
+    kappa may be a scalar or one positive integer denominator per player.
     """
 
-    kappa = _positive_integer(kappa, "kappa")
     n_samples = _positive_integer(n_samples, "n_samples")
     sizes = tuple(_positive_integer(n, "action size") for n in action_sizes)
     if not sizes:
         raise ValueError("At least one player is required.")
+    denominators = _profile_denominators(kappa, len(sizes))
     if seed is not None:
         if isinstance(seed, (bool, np.bool_)) or not isinstance(seed, (int, np.integer)):
             raise ValueError("seed must be an integer or None.")
         seed = int(seed)
     rng = Random(seed)
-    grid_sizes = tuple(comb(kappa + n - 1, n - 1) for n in sizes)
+    grid_sizes = tuple(comb(k + n - 1, n - 1) for n, k in zip(sizes, denominators, strict=True))
     remaining = prod(grid_sizes)
     swaps: dict[int, int] = {}
     for _ in range(min(n_samples, remaining)):
@@ -141,9 +152,9 @@ def sample_kappa_uniform_profiles(
             swaps[position] = replacement
         remaining -= 1
         profile = []
-        for n, grid_size in zip(reversed(sizes), reversed(grid_sizes), strict=True):
+        for n, k, grid_size in zip(reversed(sizes), reversed(denominators), reversed(grid_sizes), strict=True):
             rank, strategy_rank = divmod(rank, grid_size)
-            profile.append(_kappa_uniform_strategy_from_rank(n, kappa, strategy_rank))
+            profile.append(_kappa_uniform_strategy_from_rank(n, k, strategy_rank))
         yield tuple(reversed(profile))
 
 
@@ -163,13 +174,19 @@ def _solve_qptas(
     model: str,
     gamma,
     alpha,
-    kappa: int,
+    kappa: int | Sequence[int] | None,
     epsilon: float,
     max_candidates: int | None,
     seed: int | None,
+    screened: bool = False,
+    tau: int | None = None,
+    epsilon_scr: float | None = None,
 ) -> QPTASResult:
     start = perf_counter()
-    kappa = _positive_integer(kappa, "kappa")
+    if not screened:
+        kappa = _positive_integer(kappa, "kappa")
+    elif max_candidates is None:
+        raise ValueError("max_candidates must be a positive integer for screened sampling.")
     if max_candidates is not None:
         max_candidates = _positive_integer(max_candidates, "max_candidates")
     if not np.isscalar(epsilon) or not np.isfinite(epsilon) or epsilon < 0:
@@ -196,19 +213,33 @@ def _solve_qptas(
         if np.any(alphas <= 0) or np.any(alphas > 1):
             raise ValueError("alpha must be in (0, 1].")
 
-    total_profiles = prod(comb(kappa + n - 1, n - 1) for n in action_sizes)
-    profiles = (
-        enumerate_kappa_uniform_profiles(action_sizes, kappa)
-        if max_candidates is None
-        else sample_kappa_uniform_profiles(action_sizes, kappa, max_candidates, seed)
-    )
-    best_response_solves = 0
-    profiles_checked = 0
-    for profile in profiles:
-        profiles_checked += 1
-        current_values = []
-        regrets = []
-        best_responses = []
+    if screened and kappa is None:
+        kappa = tuple(support_sizes(K, n)[0] for n in action_sizes)
+    kappas = _profile_denominators(kappa, m)
+    total_profiles = prod(comb(k + n - 1, n - 1) for n, k in zip(action_sizes, kappas, strict=True))
+    total_pairs = None
+    if screened:
+        kappa = kappas
+        tau = support_sizes(K, action_sizes[0])[1] if tau is None else _positive_integer(tau, "tau")
+        epsilon_scr = 2.0 * epsilon / 3.0 if epsilon_scr is None else epsilon_scr
+        if not np.isscalar(epsilon_scr) or not np.isfinite(epsilon_scr) or epsilon_scr < 0:
+            raise ValueError("epsilon_scr must be finite and nonnegative.")
+        total_pairs = total_profiles * comb(tau + K - 1, K - 1) ** m
+        # Treat q_i as an additional grid factor. Distinct pairs can share x;
+        # a failed screen must not remove that x with all other choices of q.
+        candidates = sample_kappa_uniform_profiles(
+            (*action_sizes, *((K,) * m)), (*kappas, *((tau,) * m)), max_candidates, seed
+        )
+    else:
+        candidates = (
+            enumerate_kappa_uniform_profiles(action_sizes, kappa)
+            if max_candidates is None
+            else sample_kappa_uniform_profiles(action_sizes, kappa, max_candidates, seed)
+        )
+
+    def evaluate_profile(profile):
+        # Stream evaluations so unscreened search still rejects early. Screened
+        # search evaluates all current payoffs before doing any best-response LP.
         for player, tensor in enumerate(tensors):
             # Contract opponents in descending axis order, preserving scenario
             # axis 0 and all actions of the deviating player: result is (K, n_i).
@@ -219,9 +250,36 @@ def _solve_qptas(
             state_payoffs = payoff_by_action @ profile[player]
             if model == "MSD":
                 current = msd_value_from_state_payoffs(state_payoffs, probabilities, gammas[player])
-                best = _maximize_msd_on_simplex(payoff_by_action, probabilities, gammas[player])
             else:
                 current = cvar_value_from_state_payoffs(state_payoffs, probabilities, gammas[player], alphas[player])
+            if not np.isfinite(current):
+                raise RuntimeError("QPTAS regret evaluation returned a non-finite payoff.")
+            yield payoff_by_action, current
+
+    best_response_solves = 0
+    profiles_checked = 0
+    screen_rejections = 0
+    screen_passes = 0
+    for candidate in candidates:
+        profiles_checked += 1
+        profile = candidate[:m]
+        evaluations = evaluate_profile(profile)
+        if screened:
+            evaluations = list(evaluations)
+            if any(
+                np.any(q @ payoff_by_action > current + epsilon_scr)
+                for q, (payoff_by_action, current) in zip(candidate[m:], evaluations, strict=True)
+            ):
+                screen_rejections += 1
+                continue
+            screen_passes += 1
+        current_values = []
+        regrets = []
+        best_responses = []
+        for player, (payoff_by_action, current) in enumerate(evaluations):
+            if model == "MSD":
+                best = _maximize_msd_on_simplex(payoff_by_action, probabilities, gammas[player])
+            else:
                 best = _maximize_cvar_on_simplex(payoff_by_action, probabilities, gammas[player], alphas[player])
             best_response_solves += 1
             if not np.isfinite(current) or not np.isfinite(best["value"]):
@@ -253,7 +311,15 @@ def _solve_qptas(
                 termination_reason="epsilon_reached",
                 max_candidates=max_candidates,
                 seed=int(seed) if max_candidates is not None and seed is not None else None,
+                tau=tau,
+                epsilon_scr=epsilon_scr,
+                total_pairs=total_pairs,
+                screen_rejections=screen_rejections,
+                screen_passes=screen_passes,
+                screening_distributions=candidate[m:] if screened else None,
             )
+    exhausted_reason = "pair_grid_exhausted" if screened else "grid_exhausted"
+    grid_size = total_pairs if screened else total_profiles
     return QPTASResult(
         success=False,
         model=model,
@@ -263,9 +329,14 @@ def _solve_qptas(
         total_profiles=total_profiles,
         best_response_solves=best_response_solves,
         solve_time_s=perf_counter() - start,
-        termination_reason="grid_exhausted" if profiles_checked == total_profiles else "sample_exhausted",
+        termination_reason=exhausted_reason if profiles_checked == grid_size else "sample_exhausted",
         max_candidates=max_candidates,
         seed=int(seed) if max_candidates is not None and seed is not None else None,
+        tau=tau,
+        epsilon_scr=epsilon_scr,
+        total_pairs=total_pairs,
+        screen_rejections=screen_rejections,
+        screen_passes=screen_passes,
     )
 
 
@@ -351,4 +422,98 @@ def solve_cvar_qptas(
         epsilon=epsilon,
         max_candidates=max_candidates,
         seed=seed,
+    )
+
+
+def solve_msd_qptas_screened(
+    payoffs,
+    p=None,
+    *,
+    gamma=0.0,
+    kappa: int | Sequence[int] | None = None,
+    tau: int | None = None,
+    epsilon: float = 0.01,
+    epsilon_scr: float | None = None,
+    max_candidates: int = 1000,
+    seed: int | None = 0,
+) -> QPTASResult:
+    """Sample joint (x, q) pairs, screen, and certify the first epsilon-MSD-DRE.
+
+    Payoff tensors, probabilities and risk parameters follow ``solve_msd_qptas``.
+    Defaults are kappa_i=min(n_i, max(2, ceil(sqrt(n_i)))),
+    tau=min(K, max(5, ceil(sqrt(K)))), and epsilon_scr=2*epsilon/3.
+    Override kappa with a scalar or one positive integer per player, and tau
+    with a positive integer denominator (overrides need not be capped).
+
+    Draw up to max_candidates distinct joint pairs uniformly without replacement
+    from the product of the players' kappa_i-uniform strategy grids and their
+    tau-uniform scenario grids. Each q_i is independent across players within
+    a draw. A profile x can recur with a different q. Sampling is uniform over
+    integer count vectors; it does not draw scenarios according to p or project
+    q into a risk ambiguity set. Seed controls the reproducible random order.
+
+    Compute current robust payoffs using all K scenarios and p. Reject the pair
+    if any pure-action expected payoff under q_i exceeds current_i+epsilon_scr.
+    A screen failure does not prove that x fails epsilon. Only screen survivors
+    undergo full-sample, arbitrary mixed best-response LP checks. Return at the
+    first full certificate with every regret <= epsilon, using the existing
+    floating-point LP conventions. LP failures raise RuntimeError.
+
+    This is a heuristic, not the theorem's sufficient support bound.
+    profiles_checked counts joint pairs, total_profiles counts only x's grid,
+    and total_pairs counts the full (x,q) grid. Failure returns no strategies or
+    certificate and reason 'sample_exhausted' (or 'pair_grid_exhausted' if every
+    pair was checked); neither reason establishes nonexistence of an epsilon-DRE.
+    """
+
+    return _solve_qptas(
+        payoffs,
+        p,
+        model="MSD",
+        gamma=gamma,
+        alpha=None,
+        kappa=kappa,
+        epsilon=epsilon,
+        max_candidates=max_candidates,
+        seed=seed,
+        screened=True,
+        tau=tau,
+        epsilon_scr=epsilon_scr,
+    )
+
+
+def solve_cvar_qptas_screened(
+    payoffs,
+    p=None,
+    *,
+    gamma=0.0,
+    alpha=0.5,
+    kappa: int | Sequence[int] | None = None,
+    tau: int | None = None,
+    epsilon: float = 0.01,
+    epsilon_scr: float | None = None,
+    max_candidates: int = 1000,
+    seed: int | None = 0,
+) -> QPTASResult:
+    """Screen sampled (x,q) pairs and certify the first epsilon-CVaR-DRE.
+
+    Sampling, screening, defaults, counters, and termination follow
+    ``solve_msd_qptas_screened``. Gamma and alpha have the domains and scalar or
+    per-player forms documented in ``solve_cvar_qptas``. Both current payoffs
+    and best-response LPs use all K scenarios and p; q is used only in screening.
+    """
+
+    return _solve_qptas(
+        payoffs,
+        p,
+        model="CVaR",
+        gamma=gamma,
+        alpha=alpha,
+        kappa=kappa,
+        epsilon=epsilon,
+        max_candidates=max_candidates,
+        seed=seed,
+        screened=True,
+        tau=tau,
+        epsilon_scr=epsilon_scr,
     )

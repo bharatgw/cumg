@@ -50,6 +50,7 @@ class StochasticFOConfig:
     stagnation_rtol: float = 0.0
     stagnation_atol: float = 0.0
     n_random_starts: int = 4
+    jit_updates: bool = False
 
 
 @dataclass(frozen=True)
@@ -117,6 +118,8 @@ def _require_jax():
 
 
 def _validate_config(config: StochasticFOConfig, K: int) -> int:
+    if not isinstance(config.jit_updates, (bool, np.bool_)):
+        raise ValueError("jit_updates must be a boolean.")
     if (
         isinstance(config.n_random_starts, (bool, np.bool_))
         or not isinstance(config.n_random_starts, (int, np.integer))
@@ -545,16 +548,22 @@ def _run_stochastic_fo(
                 "regret_tolerance",
             )
 
+    def update(params, batch1, batch2, step):
+        residual2 = residual_fn(params, batch2)
+        _, pullback = jax.vjp(lambda z: residual_fn(z, batch1), params)
+        grad = pullback(residual2)[0]
+        grad = _clip_gradient(jnp, grad, config.gradient_clip_norm)
+        params = tuple(param - step * update for param, update in zip(params, grad, strict=True))
+        return project_fn(jnp, params, config)
+
+    # Optional compilation changes execution only: sampling, checkpoints, and
+    # stopping remain in the same Python loop. Compile time is included in timing.
+    update_fn = jax.jit(update) if config.jit_updates else update
     for iteration in range(config.max_iter):
         batch1 = jnp.asarray(_draw_batch(rng, K, batch_size))
         batch2 = jnp.asarray(_draw_batch(rng, K, batch_size))
-        residual2 = residual_fn(params, batch2)
-        _, pullback = jax.vjp(lambda z, batch=batch1: residual_fn(z, batch), params)
-        grad = pullback(residual2)[0]
-        grad = _clip_gradient(jnp, grad, config.gradient_clip_norm)
         step = config.step_size / ((iteration + 1) ** config.step_decay)
-        params = tuple(param - step * update for param, update in zip(params, grad, strict=True))
-        params = project_fn(jnp, params, config)
+        params = update_fn(params, batch1, batch2, step)
 
         should_check = (
             iteration + 1 == config.max_iter

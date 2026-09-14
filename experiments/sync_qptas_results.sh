@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Run locally after the remote campaign finishes:
 #   bash experiments/sync_qptas_results.sh root@YOUR_SERVER_IP
-# Optional overrides: VERSION, REMOTE_REPO, LOCAL_RESULT_DIR, PYTHON_BIN.
+# Optional overrides: VERSION, RESULT_PATH, REMOTE_REPO, LOCAL_RESULT_DIR, PYTHON_BIN.
 if [[ $# -ne 1 ]]; then
   echo "Usage: bash $0 USER@HOST (or an SSH host alias)" >&2
   exit 2
@@ -12,7 +12,7 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 VERSION="${VERSION:-sampled_1000_v1}"
-RESULT_PATH="experiments/results/remote/qptas_scalability/$VERSION"
+RESULT_PATH="${RESULT_PATH:-experiments/results/remote/qptas_scalability/$VERSION}"
 REMOTE_REPO="${REMOTE_REPO:-/root/cumg}"
 LOCAL_RESULT_DIR="${LOCAL_RESULT_DIR:-$REPO_ROOT/$RESULT_PATH}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
