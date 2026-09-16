@@ -1,5 +1,6 @@
 import argparse
 import importlib.util
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -9,7 +10,7 @@ import pytest
 pytest.importorskip("jax")
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / "experiments" / "compare_stochastic_fo.py"
+SCRIPT = ROOT / "experiments" / "runners/compare_stochastic_fo.py"
 SPEC = importlib.util.spec_from_file_location("compare_stochastic_fo", SCRIPT)
 assert SPEC is not None and SPEC.loader is not None
 compare_stochastic_fo = importlib.util.module_from_spec(SPEC)
@@ -17,7 +18,8 @@ SPEC.loader.exec_module(compare_stochastic_fo)
 
 
 @pytest.mark.parametrize("risk", ["msd", "cvar"])
-def test_stochastic_fo_scalability_experiment_records_pairwise_metrics(risk):
+@pytest.mark.parametrize("payoff_model", ["uniform", "cell_beta_uniform_v1"])
+def test_stochastic_fo_scalability_experiment_records_pairwise_metrics(risk, payoff_model):
     args = argparse.Namespace(
         K=[2],
         n=[2],
@@ -45,11 +47,19 @@ def test_stochastic_fo_scalability_experiment_records_pairwise_metrics(risk):
         csv=None,
         history_csv=None,
         quiet=True,
+        payoff_model=payoff_model,
+        jit_updates=True,
     )
 
     row = compare_stochastic_fo.run_instance(args, risk, K=2, n=2, seed=0)
 
     assert row["risk"] == risk
+    assert row["payoff_model"] == payoff_model
+    assert row["jit_updates"]
+    assert row["payoff_numpy_version"] == np.__version__
+    if payoff_model == "cell_beta_uniform_v1":
+        *_, population_ids = compare_stochastic_fo.simulate_population_payoffs(K=2, n=2, seed=0)
+        np.testing.assert_array_equal(json.loads(row["payoff_population_ids"]), population_ids)
     if risk == "cvar":
         assert row["alpha"] == 1.0
         assert np.isfinite(row["full_batch_theta1"])
@@ -60,6 +70,12 @@ def test_stochastic_fo_scalability_experiment_records_pairwise_metrics(risk):
         assert np.isnan(row["full_batch_theta2"])
     assert row["full_batch_has_profile"]
     assert row["minibatch_has_profile"]
+    for method in args.methods:
+        for player in ("x", "y"):
+            profile = np.asarray(json.loads(row[f"{method}_{player}"]))
+            assert profile.shape == (2,)
+            assert np.all(profile >= 0)
+            assert np.sum(profile) == pytest.approx(1.0)
     assert np.isfinite(row["full_batch_eta"])
     assert np.isfinite(row["minibatch_eta"])
     assert np.isfinite(row["time_ratio_minibatch_over_full_batch"])
@@ -101,10 +117,19 @@ def test_stochastic_fo_tuning_grid_and_history_rows(risk):
     configs = list(compare_stochastic_fo.iter_tuning_configs(args))
 
     assert len(configs) == 8
+    args.theta_step_size_grid = [0.0001, 0.001]
+    configs = list(compare_stochastic_fo.iter_tuning_configs(args))
+    assert len(configs) == 16
+    assert {config.theta_step_size for config in configs} == {0.0001, 0.001}
+    assert compare_stochastic_fo._method_config(configs[0], 2, 0, "full_batch").theta_step_size == 0.0001
     history_rows = []
     row = compare_stochastic_fo.run_instance(configs[0], risk, K=2, n=2, seed=0, history_callback=history_rows.append)
     assert row["full_batch_best_certificate_iteration"] == 0
-    assert len(history_rows) == 1
+    assert row["theta_step_size"] == 0.0001
+    assert history_rows[0]["theta_step_size"] == 0.0001
+    assert len(history_rows) == 5
+    assert {r["start_index"] for r in history_rows} == set(range(5))
+    assert all(r["start_iteration"] == 0 for r in history_rows)
     assert history_rows[0]["risk"] == risk
     if risk == "cvar":
         assert history_rows[0]["alpha"] == 1.0

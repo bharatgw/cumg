@@ -1,0 +1,66 @@
+{
+  "purpose": "Exploratory FO calibration, separate from the population campaign and paper results",
+  "python": "3.12.11 (main, Jul 21 2025, 04:22:59) [Clang 17.0.0 (clang-1700.0.13.5)]",
+  "platform": "macOS-26.5.1-arm64-arm-64bit",
+  "machine": "arm64",
+  "packages": {
+    "numpy": "2.2.6",
+    "scipy": "1.16.1",
+    "jax": "0.10.2",
+    "jaxlib": "0.10.2"
+  },
+  "git_head": "7249a0c40d56a3d4a3123d07e8412850fa6dfa6b",
+  "source_sha256": {
+    "src/cumg/stochastic_fo.py": "e517c76d46534a49eadfc1487b9f6d8ce38bed6484302f5a65e0babbbbb48aa2",
+    "src/cumg/small_support.py": "a19ee7f3b9a44ec583ff2de66f28677c8d2667b4e8f69f29146d366dfc185f33",
+    "experiments/compare_scalability_approaches.py": "01106c40dec96c495170f0c541cb1c158945353fa29b8a9d48289c695b620e67",
+    "experiments/compare_stochastic_fo.py": "acb411f510122a1aaceca1c085d0a8f66cd23b79f2387e034955d8bb23d77a20",
+    "experiments/calibrate_population_fo.sh": "fbb1c277ac941b0f45409317b7578fc774803d4453831137b1bb613267f85f1c",
+    "experiments/results/calibration/population_fo/pilot_v1/audit_certificates.py": "fd42f1f551bc3aa52757a40a6c6166357b92d4a757fafdcc8036f4a6177dc8e9"
+  },
+  "training_seed_base": 9123123,
+  "campaign_seed_base": 123,
+  "seed_formula": "seed_base + 1000000 * risk_index + 10000 * K + 100 * n + rep; msd=0, cvar=1",
+  "scope": {
+    "n": 50,
+    "training_K": 500,
+    "gamma": 0.5,
+    "alpha": 0.5,
+    "epsilon": 0.01,
+    "max_iter_per_start": 2000
+  },
+  "screening_starts": "Uniform only, no random restarts. Follow-up validation explicitly identifies restart budgets.",
+  "certification": "Full K mixed best-response LPs at iteration 0, every 100 steps, and final iteration",
+  "execution": "CPU JAX with jit_updates=True. Compile time included. Some sweeps overlap on this laptop; timings are diagnostic and must not be compared to remote results.",
+  "numpy_warning": "Local NumPy 2.2.6 emits matmul RuntimeWarnings on bounded finite inputs, also observed in earlier diagnostics. Retain logs and independently audit selected profile payoffs.",
+  "synced_numpy_version": "2.5.3; these are newly generated local games, not bitwise remote replays",
+  "completed_at_utc": "2026-09-14T05:25:07.805935+00:00",
+  "validation_seed_base": 9223123,
+  "validation_K_reps": {
+    "500": 3,
+    "1000": 1
+  },
+  "validation_total_starts_allowed": 5,
+  "phases": [
+    "baseline",
+    "regularization_msd",
+    "regularization_steps_cvar",
+    "steps_msd",
+    "large_steps_cvar",
+    "logit_steps",
+    "logit_control",
+    "validation_msd",
+    "validation_cvar_full",
+    "validation_cvar_mini",
+    "larger_msd",
+    "larger_cvar_full",
+    "larger_cvar_mini"
+  ],
+  "tests": {
+    "passed": 294,
+    "external_solver_tests_deselected": 15,
+    "ruff": "passed",
+    "shell_syntax": "passed"
+  },
+  "validation_parameter_selection": "Lowest screening regret per risk/method. CVaR full batch uses bound 100, tied exactly with bound 20 on the screening game; other selected modes use bound 20. Frozen before validation."
+}

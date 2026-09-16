@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 import numpy as np
 import pytest
 from sample_games import dominant_action_game, matching_pennies_game
@@ -5,13 +7,76 @@ from sample_games import dominant_action_game, matching_pennies_game
 pytest.importorskip("jax")
 
 from cumg import StochasticFOConfig, solve_cvar_stochastic_fo, solve_msd_stochastic_fo
-from cumg.stochastic_fo import varphi_tau
+from cumg.small_support import full_cvar_regret, full_msd_regret
+from cumg.stochastic_fo import StochasticFOResult, _solve_with_restarts, varphi_tau
 
 
 def assert_mixed_strategy(strategy):
     assert np.all(np.isfinite(strategy))
     assert np.all(strategy >= 0.0)
     assert np.sum(strategy) == pytest.approx(1.0, abs=1e-10)
+
+
+@pytest.mark.parametrize("solver", [solve_msd_stochastic_fo, solve_cvar_stochastic_fo])
+@pytest.mark.parametrize("batch_size", [None, 2])
+@pytest.mark.parametrize("theta_step_size", [None, 0.0001])
+def test_compiled_updates_match_eager_trajectory(solver, batch_size, theta_step_size):
+    A, B = np.random.default_rng(7).random((2, 4, 3, 2))
+    config = StochasticFOConfig(
+        kappa=0.003,
+        tau=0.002,
+        max_iter=20,
+        batch_size=batch_size,
+        step_size=0.01,
+        theta_step_size=theta_step_size,
+        seed=13,
+        x0=np.array([0.2, 0.3, 0.5]),
+        y0=np.array([0.7, 0.3]),
+        n_random_starts=0,
+        record_every=5,
+        certify_every=5,
+        regret_tolerance=0,
+    )
+    eager = solver(A, B, [0.1, 0.2, 0.3, 0.4], gamma=0.5, config=config)
+    compiled = solver(A, B, [0.1, 0.2, 0.3, 0.4], gamma=0.5, config=replace(config, jit_updates=True))
+    assert eager.iterations == compiled.iterations == 20
+    assert eager.termination_reason == compiled.termination_reason
+    for first, second in zip(eager.history, compiled.history, strict=True):
+        for key in ("x", "y", "eta", "objective", "residual_norm"):
+            np.testing.assert_allclose(first[key], second[key], rtol=1e-8, atol=1e-10)
+        if "theta" in first:
+            np.testing.assert_allclose(first["theta"], second["theta"], rtol=1e-8, atol=1e-10)
+
+
+@pytest.mark.parametrize("jit_updates", [False, True])
+@pytest.mark.parametrize("theta_step_size", [None, 0.01])
+def test_threshold_rate_matches_closed_form_quadratic_descent(jit_updates, theta_step_size):
+    from cumg.stochastic_fo import _require_jax, _run_stochastic_fo
+
+    jax, jnp = _require_jax()
+    initial = (jnp.array([1.0, -1.0]), jnp.array([2.0, -2.0]), jnp.array(3.0), jnp.array(-4.0))
+    config = StochasticFOConfig(
+        max_iter=3,
+        step_size=0.2,
+        theta_step_size=theta_step_size,
+        step_decay=0.5,
+        n_random_starts=0,
+        jit_updates=jit_updates,
+    )
+    # F(z)=z makes 1/2 ||F(z)||^2 a quadratic with a known descent trajectory.
+    params, *_ = _run_stochastic_fo(
+        jax,
+        jnp,
+        initial,
+        lambda z, batch: jnp.concatenate([jnp.ravel(leaf) for leaf in z]),
+        lambda jnp, z, config: z,
+        config,
+        K=2,
+    )
+    for index, (before, after) in enumerate(zip(initial, params, strict=True)):
+        rate = 0.2 if index < 2 or theta_step_size is None else theta_step_size
+        expected = before * np.prod(1 - rate / np.sqrt(np.arange(1, 4)))
+        np.testing.assert_allclose(after, expected, atol=1e-12, rtol=0)
 
 
 def test_varphi_tau_is_stable_and_approximates_positive_part():
@@ -37,6 +102,9 @@ def test_stochastic_fo_rejects_invalid_parameters():
         solve_msd_stochastic_fo(A, B, p, gamma=0.0, config=StochasticFOConfig(tau=0.0))
     with pytest.raises(ValueError, match="batch_size"):
         solve_msd_stochastic_fo(A, B, p, gamma=0.0, config=StochasticFOConfig(batch_size=0))
+    for value in (0, -1, np.nan, np.inf):
+        with pytest.raises(ValueError, match="theta_step_size"):
+            solve_cvar_stochastic_fo(A, B, p, config=StochasticFOConfig(theta_step_size=value))
     with pytest.raises(ValueError, match="requires certify_every"):
         solve_msd_stochastic_fo(
             A,
@@ -154,9 +222,11 @@ def test_certify_every_records_best_certificate_and_stops_when_regret_is_small()
     assert result.history[0]["eta"] == pytest.approx(0.0, abs=1e-8)
     assert result.history[0]["regret1"] == pytest.approx(0.0, abs=1e-8)
     assert result.history[0]["regret2"] == pytest.approx(0.0, abs=1e-8)
+    assert len(result.start_summaries) == 1  # Success at uniform must skip all random starts.
 
 
-def test_stochastic_fo_stops_on_certificate_stagnation():
+@pytest.mark.parametrize("n_random_starts", [0, 4])
+def test_stochastic_fo_stops_on_certificate_stagnation(n_random_starts):
     A, B, p = dominant_action_game()
     config = StochasticFOConfig(
         kappa=0.05,
@@ -170,11 +240,127 @@ def test_stochastic_fo_stops_on_certificate_stagnation():
         regret_tolerance=0.0,
         stagnation_window=1,
         stagnation_rtol=1.0,
+        n_random_starts=n_random_starts,
     )
 
     result = solve_msd_stochastic_fo(A, B, p, gamma=0.0, config=config)
 
     assert not result.success
-    assert result.iterations == 1
+    assert result.iterations == 1 + n_random_starts
     assert result.termination_reason == "stagnation"
     assert result.best_certificate is not None
+    assert all(start["termination_reason"] == "stagnation" for start in result.start_summaries)
+
+
+@pytest.mark.parametrize("solver", [solve_msd_stochastic_fo, solve_cvar_stochastic_fo])
+@pytest.mark.parametrize("batch_size", [None, 1])
+def test_failed_fo_tries_four_reproducible_random_profiles(solver, batch_size):
+    A, B, p = dominant_action_game()
+    config = StochasticFOConfig(max_iter=0, regret_tolerance=0, seed=13, batch_size=batch_size)
+    first = solver(A, B, p, gamma=0.0, config=config)
+    repeat = solver(A, B, p, gamma=0.0, config=config)
+    short = solver(A, B, p, gamma=0.0, config=replace(config, n_random_starts=2))
+    changed = solver(A, B, p, gamma=0.0, config=replace(config, seed=14))
+
+    assert len(first.start_summaries) == 5
+    assert len(short.start_summaries) == 3
+    assert not first.success
+    assert first.certificate["eta"] == min(r["eta"] for r in first.start_summaries)
+    assert first.selected_start == int(np.argmin([r["eta"] for r in first.start_summaries]))
+    for index, start in enumerate(first.start_summaries):
+        for field in ("initial_x", "initial_y"):
+            assert_mixed_strategy(np.array(start[field]))
+            np.testing.assert_array_equal(start[field], repeat.start_summaries[index][field])
+            if index < 3:
+                np.testing.assert_array_equal(start[field], short.start_summaries[index][field])
+            if index == 0:
+                np.testing.assert_allclose(start[field], [0.5, 0.5])
+            else:
+                assert not np.allclose(start[field], [0.5, 0.5])
+        assert start["termination_reason"] == "max_iter"
+        assert start["time_s"] > 0
+    assert first.start_summaries[1]["initial_x"] != changed.start_summaries[1]["initial_x"]
+    np.testing.assert_array_equal(first.x, repeat.x)
+    assert first.solve_time_s >= sum(r["time_s"] for r in first.start_summaries)
+
+
+@pytest.mark.parametrize("solver", [solve_msd_stochastic_fo, solve_cvar_stochastic_fo])
+def test_fo_honors_supplied_profile_before_random_restarts(solver):
+    A, B, p = matching_pennies_game()
+    config = StochasticFOConfig(x0=np.array([0.8, 0.2]), y0=np.array([0.3, 0.7]), max_iter=0, regret_tolerance=10)
+    result = solver(A, B, p, gamma=0, config=config)
+    assert result.success and len(result.start_summaries) == 1
+    np.testing.assert_allclose(result.start_summaries[0]["initial_x"], config.x0)
+    np.testing.assert_allclose(result.start_summaries[0]["initial_y"], config.y0)
+
+
+@pytest.mark.parametrize("solver", [solve_msd_stochastic_fo, solve_cvar_stochastic_fo])
+def test_minibatch_restarts_reproduce_updated_profiles_and_certificates(solver):
+    A, B, p = dominant_action_game()
+    config = StochasticFOConfig(
+        max_iter=2,
+        batch_size=1,
+        n_random_starts=1,
+        seed=13,
+        regret_tolerance=0,
+        certify_every=1,
+        record_every=1,
+    )
+    first = solver(A, B, p, gamma=0.5, config=config)
+    repeat = solver(A, B, p, gamma=0.5, config=config)
+    assert first.iterations == 4
+    assert len(first.start_summaries) == 2
+    np.testing.assert_allclose(first.x, repeat.x, atol=1e-12)
+    np.testing.assert_allclose(first.y, repeat.y, atol=1e-12)
+    assert [r["eta"] for r in first.history] == pytest.approx([r["eta"] for r in repeat.history], abs=1e-12)
+    if solver is solve_msd_stochastic_fo:
+        certificate = full_msd_regret(A, B, p, 0.5, first.x, first.y)
+    else:
+        certificate = full_cvar_regret(A, B, p, 0.5, 0.5, first.x, first.y)
+    assert first.certificate["eta"] == pytest.approx(certificate["eta"], abs=1e-12)
+
+
+@pytest.mark.parametrize("etas, expected", [([0.2, 0.05, 0.01, 0.0, 0.0], 3), ([0.2, 0.04, 0.08, 0.1, 0.06], 5)])
+def test_restart_selection_uses_regret_and_stops_at_first_threshold(etas, expected):
+    configs = []
+
+    def solve_one(config):
+        index = len(configs)
+        configs.append(config)
+        eta = etas[index]
+        checkpoint = {"iteration": 1, "eta": eta, "objective": 5 - index}
+        return StochasticFOResult(
+            success=eta <= 0.01,
+            x=np.array([index / 5, 1 - index / 5]),
+            y=np.full(2, 0.5),
+            model="test",
+            certificate={"eta": eta},
+            residual_norm=5 - index,
+            objective=5 - index,
+            iterations=1,
+            solve_time_s=0,
+            termination_reason="regret_tolerance" if eta <= 0.01 else "stagnation",
+            history=[checkpoint],
+            best_certificate=checkpoint,
+            best_iterate=checkpoint,
+            config=config,
+        )
+
+    result = _solve_with_restarts(solve_one, StochasticFOConfig(regret_tolerance=0.01, seed=5), 2, 2)
+    assert len(configs) == expected
+    assert result.iterations == expected
+    assert result.selected_start == int(np.argmin(etas[:expected]))
+    assert result.certificate["eta"] == min(etas[:expected])
+    assert result.success == (expected == 3)
+    assert result.best_certificate["iteration"] == result.selected_start + 1
+    assert [r["start_index"] for r in result.history] == list(range(expected))
+    assert [r["iteration"] for r in result.history] == list(range(1, expected + 1))
+    assert all(c.n_random_starts == 0 for c in configs)
+    assert len({c.seed for c in configs}) == expected
+
+
+@pytest.mark.parametrize("value", [-1, 1.5, True])
+def test_fo_rejects_invalid_random_restart_count(value):
+    A, B, p = matching_pennies_game()
+    with pytest.raises(ValueError, match="n_random_starts"):
+        solve_msd_stochastic_fo(A, B, p, config=StochasticFOConfig(n_random_starts=value))

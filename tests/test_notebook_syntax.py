@@ -8,8 +8,8 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 NOTEBOOKS = (
-    ROOT / "experiments" / "mcpAlgoAnalysis.ipynb",
-    ROOT / "experiments" / "mcpSolvers.ipynb",
+    ROOT / "experiments" / "analysis/mcpAlgoAnalysis.ipynb",
+    ROOT / "experiments" / "analysis/mcpSolvers.ipynb",
     ROOT / "notebooks" / "nonLinearMCPSolver.ipynb",
     ROOT / "notebooks" / "solver.ipynb",
 )

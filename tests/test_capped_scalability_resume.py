@@ -4,10 +4,12 @@ import importlib.util
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 EXPERIMENTS = ROOT / "experiments"
 sys.path.insert(0, str(EXPERIMENTS))
-SCRIPT = EXPERIMENTS / "capped_scalability_resume.py"
+SCRIPT = EXPERIMENTS / "runners/capped_scalability_resume.py"
 SPEC = importlib.util.spec_from_file_location("capped_scalability_resume", SCRIPT)
 assert SPEC is not None and SPEC.loader is not None
 capped_scalability_resume = importlib.util.module_from_spec(SPEC)
@@ -38,6 +40,90 @@ def write_row(path, row):
         writer = csv.DictWriter(f, fieldnames=list(row))
         writer.writeheader()
         writer.writerow(row)
+
+
+@pytest.mark.parametrize(
+    "change,allowed",
+    [
+        ({"K_GRID": "500 1000 2000", "METHODS": "qptas qptas_screened stochastic_full_batch"}, True),
+        ({"K_GRID": "500"}, False),
+        ({"METHODS": "qptas_screened"}, False),
+        ({"CERTIFY_EVERY": "1"}, False),
+        ({"EPSILON": "0.1"}, False),
+        ({"SEED_BASE": "42"}, False),
+        ({"MAX_ITER": "3000"}, False),
+        ({"STAGNATION_WINDOW": "600"}, False),
+    ],
+)
+def test_config_extension_only_adds_grid_cells_and_methods(tmp_path, change, allowed):
+    original = {
+        "K_GRID": "1000 2000",
+        "METHODS": "qptas stochastic_full_batch",
+        "CERTIFY_EVERY": "100",
+        "EPSILON": "0.01",
+        "SEED_BASE": "123",
+        "MAX_ITER": "2000",
+        "STAGNATION_WINDOW": "500",
+    }
+    path = tmp_path / "run_config.env"
+    text = "".join(f"{key}={value}\n" for key, value in original.items())
+    path.write_text(text)
+    proposed = "".join(f"{key}={value}\n" for key, value in (original | change).items())
+    if allowed:
+        archive = capped_scalability_resume.extend_run_config(path, proposed)
+        assert archive.read_text() == text
+        assert path.read_text() == proposed
+    else:
+        with pytest.raises(ValueError, match="Configuration differs"):
+            capped_scalability_resume.extend_run_config(path, proposed)
+        assert path.read_text() == text
+        assert list(tmp_path.glob("*.env")) == [path]
+
+
+def test_restart_campaign_does_not_reuse_uniform_only_legacy_results(tmp_path):
+    args = grid_args(tmp_path, ["stochastic_full_batch"])
+    args.stochastic_n_random_starts = 4
+    task = capped_scalability_resume.Task("cvar", 500, 10, 0, "stochastic_full_batch")
+    row = {
+        "stochastic_full_batch_time_s": 1.0,
+        "stochastic_full_batch_eta": 0.001,
+        "stochastic_full_batch_success": True,
+    }
+    write_row(capped_scalability_resume.legacy_result_path(args.legacy_dir, task), row)
+    assert capped_scalability_resume.resolve_task(task, args)["status"] == "pending"
+    args.stochastic_n_random_starts = 0
+    assert capped_scalability_resume.resolve_task(task, args)["status"] == "completed"
+    args.stochastic_n_random_starts = 4
+    row["stochastic_n_random_starts"] = 4
+    row["stochastic_full_batch_starts_attempted"] = 3
+    row["stochastic_full_batch_selected_start"] = 2
+    row["stochastic_full_batch_start_summaries"] = '[{"start_index": 2}]'
+    write_row(capped_scalability_resume.method_shard_path(args.result_dir, task), row)
+    record = capped_scalability_resume.resolve_task(task, args)
+    assert record["status"] == "completed"
+    assert record["selected_start"] == "2"
+    assert record["start_summaries"] == row["stochastic_full_batch_start_summaries"]
+    args.stochastic_n_random_starts = 0
+    with pytest.raises(ValueError, match="restart configuration"):
+        capped_scalability_resume.resolve_task(task, args)
+
+
+def test_population_campaign_does_not_reuse_uniform_games(tmp_path):
+    args = grid_args(tmp_path, ["qptas"])
+    args.payoff_model = "cell_beta_uniform_v1"
+    task = capped_scalability_resume.Task("cvar", 500, 10, 0, "qptas")
+    row = {"qptas_time_s": 1.0, "qptas_success": True, "qptas_eta": 0.001}
+    write_row(capped_scalability_resume.legacy_result_path(args.legacy_dir, task), row)
+    assert capped_scalability_resume.resolve_task(task, args)["status"] == "pending"
+    write_row(capped_scalability_resume.method_shard_path(args.result_dir, task), row)
+    with pytest.raises(ValueError, match="Payoff model differs"):
+        capped_scalability_resume.resolve_task(task, args)
+    row.update(payoff_model="cell_beta_uniform_v1", payoff_populations="[]", payoff_population_ids="[[[0]],[[4]]]")
+    write_row(capped_scalability_resume.method_shard_path(args.result_dir, task), row)
+    record = capped_scalability_resume.resolve_task(task, args)
+    assert record["status"] == "completed"
+    assert record["payoff_model"] == row["payoff_model"]
+    assert record["payoff_population_ids"] == row["payoff_population_ids"]
 
 
 def test_legacy_results_are_reused_or_uniformly_reclassified_as_timeouts(tmp_path):

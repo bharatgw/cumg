@@ -23,11 +23,11 @@ jobs:
 
       - name: Run ruff
         run: |
-          python -m ruff check src tests examples experiments/generate_readme_figures.py
-          python -m ruff format --check src tests examples experiments/generate_readme_figures.py
+          python -m ruff check src tests examples experiments/common experiments/runners experiments/diagnostics experiments/analysis/*.py experiments/__main__.py experiments/__init__.py
+          python -m ruff format --check src tests examples experiments/common experiments/runners experiments/diagnostics experiments/analysis/*.py experiments/__main__.py experiments/__init__.py
 
       - name: Compile Python files
-        run: python -m compileall src tests examples experiments/generate_readme_figures.py
+        run: python -m compileall src tests examples experiments/common experiments/runners experiments/diagnostics experiments/analysis/*.py experiments/__main__.py experiments/__init__.py
 
       - name: Run tests
         run: python -m pytest -m "not solver"

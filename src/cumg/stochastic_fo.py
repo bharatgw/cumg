@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 import numpy as np
@@ -23,7 +23,14 @@ def varphi_tau(a, tau: float):
 
 @dataclass(frozen=True)
 class StochasticFOConfig:
-    """Configuration for stochastic first-order residual minimization."""
+    """FO settings: one supplied/uniform start and up to n_random_starts retries.
+
+    max_iter and stagnation limits apply separately to each start. Periodic
+    regret stopping requires certify_every; otherwise only the final certificate
+    is available. The default regret threshold is 0.001, not 0.01.
+    theta_step_size optionally sets a separate initial CVaR threshold learning
+    rate, with the same step_decay; None uses step_size. MSD ignores this rate.
+    """
 
     kappa: float = 1e-2
     tau: float = 1e-2
@@ -44,11 +51,21 @@ class StochasticFOConfig:
     stagnation_window: int | None = None
     stagnation_rtol: float = 0.0
     stagnation_atol: float = 0.0
+    n_random_starts: int = 4
+    jit_updates: bool = False
+    theta_step_size: float | None = None
+    capture_certificates: bool = False
 
 
 @dataclass(frozen=True)
 class StochasticFOResult:
-    """Result from stochastic first-order residual minimization."""
+    """Best certified profile, cumulative work, and per-start provenance.
+
+    iterations counts all attempted starts. History rows identify independent
+    starts with start_index/start_iteration; iteration is cumulative. The
+    termination_reason belongs to selected_start, and start_summaries records
+    why every attempted start stopped, including its initial profile and timing.
+    """
 
     success: bool
     x: np.ndarray
@@ -65,6 +82,8 @@ class StochasticFOResult:
     history: list[dict[str, Any]] = field(default_factory=list)
     config: StochasticFOConfig | None = None
     termination_reason: str = "max_iter"
+    selected_start: int = 0
+    start_summaries: list[dict[str, Any]] = field(default_factory=list)
 
     def as_dict(self) -> dict[str, Any]:
         """Return a notebook-friendly dictionary representation."""
@@ -84,6 +103,8 @@ class StochasticFOResult:
             "best_iterate": self.best_iterate,
             "best_certificate": self.best_certificate,
             "history": self.history,
+            "selected_start": self.selected_start,
+            "start_summaries": self.start_summaries,
         }
 
 
@@ -101,6 +122,14 @@ def _require_jax():
 
 
 def _validate_config(config: StochasticFOConfig, K: int) -> int:
+    if not isinstance(config.jit_updates, (bool, np.bool_)):
+        raise ValueError("jit_updates must be a boolean.")
+    if (
+        isinstance(config.n_random_starts, (bool, np.bool_))
+        or not isinstance(config.n_random_starts, (int, np.integer))
+        or config.n_random_starts < 0
+    ):
+        raise ValueError("n_random_starts must be a nonnegative integer.")
     if not np.isfinite(config.kappa) or config.kappa <= 0:
         raise ValueError("kappa must be finite and positive.")
     if not np.isfinite(config.tau) or config.tau <= 0:
@@ -109,6 +138,8 @@ def _validate_config(config: StochasticFOConfig, K: int) -> int:
         raise ValueError("max_iter must be a nonnegative integer.")
     if not np.isfinite(config.step_size) or config.step_size <= 0:
         raise ValueError("step_size must be finite and positive.")
+    if config.theta_step_size is not None and (not np.isfinite(config.theta_step_size) or config.theta_step_size <= 0):
+        raise ValueError("theta_step_size must be finite and positive when provided.")
     if not np.isfinite(config.step_decay) or config.step_decay < 0:
         raise ValueError("step_decay must be finite and nonnegative.")
     if config.batch_size is None:
@@ -513,6 +544,8 @@ def _run_stochastic_fo(
                 include_theta,
                 checkpoint,
             )
+        elif config.capture_certificates and checkpoint is not None:
+            history.append(dict(checkpoint))
         if checkpoint is not None and checkpoint["eta"] <= config.regret_tolerance:
             return (
                 params,
@@ -523,16 +556,26 @@ def _run_stochastic_fo(
                 "regret_tolerance",
             )
 
+    def update(params, batch1, batch2, step):
+        residual2 = residual_fn(params, batch2)
+        _, pullback = jax.vjp(lambda z: residual_fn(z, batch1), params)
+        grad = pullback(residual2)[0]
+        grad = _clip_gradient(jnp, grad, config.gradient_clip_norm)
+        theta_step = step if config.theta_step_size is None else step * (config.theta_step_size / config.step_size)
+        params = tuple(
+            param - (step if index < 2 else theta_step) * update
+            for index, (param, update) in enumerate(zip(params, grad, strict=True))
+        )
+        return project_fn(jnp, params, config)
+
+    # Optional compilation changes execution only: sampling, checkpoints, and
+    # stopping remain in the same Python loop. Compile time is included in timing.
+    update_fn = jax.jit(update) if config.jit_updates else update
     for iteration in range(config.max_iter):
         batch1 = jnp.asarray(_draw_batch(rng, K, batch_size))
         batch2 = jnp.asarray(_draw_batch(rng, K, batch_size))
-        residual2 = residual_fn(params, batch2)
-        _, pullback = jax.vjp(lambda z, batch=batch1: residual_fn(z, batch), params)
-        grad = pullback(residual2)[0]
-        grad = _clip_gradient(jnp, grad, config.gradient_clip_norm)
         step = config.step_size / ((iteration + 1) ** config.step_decay)
-        params = tuple(param - step * update for param, update in zip(params, grad, strict=True))
-        params = project_fn(jnp, params, config)
+        params = update_fn(params, batch1, batch2, step)
 
         should_check = (
             iteration + 1 == config.max_iter
@@ -579,6 +622,8 @@ def _run_stochastic_fo(
                     include_theta,
                     checkpoint,
                 )
+            elif config.capture_certificates and checkpoint is not None:
+                history.append(dict(checkpoint))
             if should_certify:
                 if checkpoint is not None and checkpoint["eta"] <= config.regret_tolerance:
                     termination_reason = "regret_tolerance"
@@ -598,6 +643,105 @@ def _run_stochastic_fo(
     )
 
 
+def _solve_with_restarts(solve_one, config: StochasticFOConfig, n1: int, n2: int) -> StochasticFOResult:
+    """Try the supplied/uniform profile, then random profiles only after failure.
+
+    History iterations count cumulative work; start_iteration identifies the
+    independent trajectory. Each start resets its steps and stagnation trace.
+    """
+    started = time.perf_counter()
+    profile_stream, batch_stream = np.random.SeedSequence(config.seed).spawn(2)
+    rng = np.random.default_rng(profile_stream)
+    batch_seeds = batch_stream.spawn(config.n_random_starts)
+    best = None
+    best_iterate = None
+    history = []
+    summaries = []
+    total_iterations = 0
+    selected_start = 0
+    for start_index in range(config.n_random_starts + 1):
+        start_config = replace(config, n_random_starts=0)
+        if start_index:
+            start_config = replace(
+                start_config,
+                x0=rng.dirichlet(np.ones(n1)),
+                y0=rng.dirichlet(np.ones(n2)),
+                theta0=None,
+                seed=int(batch_seeds[start_index - 1].generate_state(1)[0]),
+            )
+        attempt_started = time.perf_counter()
+        result = solve_one(start_config)
+        attempt_time = time.perf_counter() - attempt_started
+        eta = float(result.certificate["eta"])
+        if not np.isfinite(eta):
+            raise RuntimeError(f"Stochastic FO start {start_index} returned a non-finite certificate.")
+        offset = total_iterations
+        # The existing projection and normalization also define the actual
+        # initial profiles for custom x0/y0 and bounded logits.
+        initial_profiles = []
+        for strategy, dim, name in ((start_config.x0, n1, "x0"), (start_config.y0, n2, "y0")):
+            logits = _project_logits(np, _initial_logits(strategy, dim, name), config.logit_bound)
+            weights = np.exp(logits - np.max(logits))
+            initial_profiles.append((weights / weights.sum()).tolist())
+        summaries.append(
+            {
+                "start_index": start_index,
+                "seed": None if start_config.seed is None else int(start_config.seed),
+                "initial_x": initial_profiles[0],
+                "initial_y": initial_profiles[1],
+                "eta": eta,
+                "success": bool(eta <= config.regret_tolerance),
+                "iterations": result.iterations,
+                "time_s": attempt_time,
+                "termination_reason": result.termination_reason,
+            }
+        )
+        for checkpoint in result.history:
+            history.append(
+                {
+                    **checkpoint,
+                    "start_index": start_index,
+                    "start_iteration": checkpoint["iteration"],
+                    "iteration": offset + checkpoint["iteration"],
+                }
+            )
+        if result.best_iterate and (
+            best_iterate is None or result.best_iterate["objective"] < best_iterate["objective"]
+        ):
+            best_iterate = {
+                **result.best_iterate,
+                "start_index": start_index,
+                "start_iteration": result.best_iterate["iteration"],
+                "iteration": offset + result.best_iterate["iteration"],
+            }
+        certificate = result.best_certificate
+        if certificate is not None:
+            certificate = {
+                **certificate,
+                "start_index": start_index,
+                "start_iteration": certificate["iteration"],
+                "iteration": offset + certificate["iteration"],
+            }
+        if best is None or eta < float(best.certificate["eta"]):
+            best = replace(result, best_certificate=certificate)
+            selected_start = start_index
+        total_iterations += result.iterations
+        if eta <= config.regret_tolerance:
+            break
+    assert best is not None
+    return replace(
+        best,
+        success=bool(best.certificate["eta"] <= config.regret_tolerance),
+        iterations=total_iterations,
+        solve_time_s=time.perf_counter() - started,
+        config=config,
+        best_iterate=best_iterate or {},
+        history=history,
+        selected_start=selected_start,
+        start_summaries=summaries,
+    )
+
+
 def solve_msd_stochastic_fo(
     A_list,
     B_list,
@@ -605,13 +749,26 @@ def solve_msd_stochastic_fo(
     gamma: float = 0.0,
     config: StochasticFOConfig | None = None,
 ) -> StochasticFOResult:
-    """Run stochastic first-order error minimization for a smoothed MSD game."""
+    """Solve from uniform (or x0/y0), with up to four random restarts by default.
+
+    Each failed start gets its own max_iter budget. Return immediately on a
+    certificate <= regret_tolerance; otherwise return the best certified profile.
+    Set n_random_starts=0 for a single start. Iterations and solve_time_s include
+    all attempted starts; termination_reason describes the selected start.
+    """
 
     A, B, p = normalize_game_inputs(A_list, B_list, p)
     _validate_gamma_msd(gamma)
     config = config or StochasticFOConfig()
     batch_size = _validate_config(config, A.shape[0])
     del batch_size
+    if config.n_random_starts:
+        return _solve_with_restarts(
+            lambda start_config: solve_msd_stochastic_fo(A, B, p, gamma, start_config),
+            config,
+            A.shape[1],
+            A.shape[2],
+        )
     jax, jnp = _require_jax()
     w1 = jnp.asarray(_initial_logits(config.x0, A.shape[1], "x0"))
     w2 = jnp.asarray(_initial_logits(config.y0, A.shape[2], "y0"))
@@ -681,13 +838,25 @@ def solve_cvar_stochastic_fo(
     alpha: float = 0.5,
     config: StochasticFOConfig | None = None,
 ) -> StochasticFOResult:
-    """Run stochastic first-order error minimization for a smoothed CVaR game."""
+    """Solve CVaR with the same conditional restarts as solve_msd_stochastic_fo.
+
+    Random restarts initialize each player's strategy independently from
+    Dirichlet(1, ..., 1), and recompute their CVaR thresholds for that profile.
+    The configured seed controls both restart profiles and minibatch streams.
+    """
 
     A, B, p = normalize_game_inputs(A_list, B_list, p)
     _validate_gamma_cvar(gamma, alpha)
     config = config or StochasticFOConfig()
     batch_size = _validate_config(config, A.shape[0])
     del batch_size
+    if config.n_random_starts:
+        return _solve_with_restarts(
+            lambda start_config: solve_cvar_stochastic_fo(A, B, p, gamma, alpha, start_config),
+            config,
+            A.shape[1],
+            A.shape[2],
+        )
     jax, jnp = _require_jax()
     w1_np = _initial_logits(config.x0, A.shape[1], "x0")
     w2_np = _initial_logits(config.y0, A.shape[2], "y0")

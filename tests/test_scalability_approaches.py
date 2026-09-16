@@ -12,7 +12,7 @@ pytest.importorskip("jax")
 from cumg.results import SupportSearchResult
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / "experiments" / "compare_scalability_approaches.py"
+SCRIPT = ROOT / "experiments" / "runners/compare_scalability_approaches.py"
 SPEC = importlib.util.spec_from_file_location("compare_scalability_approaches", SCRIPT)
 assert SPEC is not None and SPEC.loader is not None
 compare_scalability_approaches = importlib.util.module_from_spec(SPEC)
@@ -85,6 +85,8 @@ def test_scalability_driver_records_non_solver_methods(risk):
     assert row["stochastic_entropy_kappa"] == args.entropy_kappa
     assert row["stochastic_smoothing_tau"] == args.smoothing_tau
     assert row["stochastic_step_size"] == args.step_size
+    assert row["stochastic_theta_step_size"] == (args.step_size if risk == "cvar" else None)
+    assert row["stochastic_jit_updates"] is False
     assert row["stochastic_step_decay"] == args.step_decay
     assert row["stochastic_record_every"] == args.record_every
     assert row["stochastic_certify_every"] == args.certify_every
@@ -94,11 +96,15 @@ def test_scalability_driver_records_non_solver_methods(risk):
 def test_scalability_driver_accepts_stochastic_specific_regret_tolerance():
     args = base_args(["stochastic_full_batch"])
     args.stochastic_regret_tolerance = 1e-4
+    args.jit_updates = True
 
     config = compare_scalability_approaches._stochastic_config(args, K=2, seed=0, method="stochastic_full_batch")
     row = compare_scalability_approaches.run_instance(args, risk="msd", K=2, n=2, seed=0)
 
     assert config.regret_tolerance == 1e-4
+    assert config.jit_updates
+    assert config.theta_step_size is None
+    assert row["stochastic_jit_updates"]
     assert row["epsilon"] == args.epsilon
     assert row["stochastic_regret_tolerance"] == 1e-4
 

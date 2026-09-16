@@ -1,0 +1,382 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Resume the original CVaR grid one method at a time.  Completed legacy method
+# measurements are reused, measurements over the cap are classified as
+# timeouts, and only unresolved method/replicate pairs are launched.
+#
+# Typical remote invocation after stopping the uncapped runner:
+#   nohup ./experiments/runners/capped.sh \
+#     > capped_24h_runner.log 2>&1 &
+
+: "${WORKERS?Launch with python -m experiments run}"
+: "${REPS?Launch with python -m experiments run}"
+: "${SEED_BASE?Launch with python -m experiments run}"
+: "${RISK_GRID?Launch with python -m experiments run}"
+: "${K_GRID?Launch with python -m experiments run}"
+: "${N_GRID?Launch with python -m experiments run}"
+: "${METHODS?Launch with python -m experiments run}"
+
+: "${GAMMA?Launch with python -m experiments run}"
+: "${ALPHA?Launch with python -m experiments run}"
+: "${EPSILON?Launch with python -m experiments run}"
+: "${EPSILON_SCR?Launch with python -m experiments run}"
+: "${STOCHASTIC_REGRET_TOLERANCE?Launch with python -m experiments run}"
+: "${STOCHASTIC_N_RANDOM_STARTS?Launch with python -m experiments run}"
+: "${PAYOFF_MODEL?Launch with python -m experiments run}"
+: "${MAX_CANDIDATES?Launch with python -m experiments run}"
+: "${N_SCREEN_STARTS?Launch with python -m experiments run}"
+: "${N_SUPPORT_STARTS?Launch with python -m experiments run}"
+: "${SCREEN_MAXITER?Launch with python -m experiments run}"
+: "${SUPPORT_MAXITER?Launch with python -m experiments run}"
+: "${MAX_ITER?Launch with python -m experiments run}"
+: "${CERTIFY_EVERY?Launch with python -m experiments run}"
+: "${STAGNATION_WINDOW?Launch with python -m experiments run}"
+: "${STAGNATION_RTOL?Launch with python -m experiments run}"
+: "${STAGNATION_ATOL?Launch with python -m experiments run}"
+
+: "${SOLVER?Launch with python -m experiments run}"
+: "${FALLBACK_SOLVER?Launch with python -m experiments run}"
+: "${METHOD_TIME_LIMIT_SECONDS?Launch with python -m experiments run}"
+: "${RETRY_ERRORS?Launch with python -m experiments run}"
+: "${DRY_RUN?Launch with python -m experiments run}"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+cd "$REPO_ROOT"
+
+PYTHON_BIN="${PYTHON_BIN:-python}"
+PYTHON_BIN="$(command -v "$PYTHON_BIN")"
+: "${LEGACY_RESULT_DIR?Launch with python -m experiments run}"
+: "${RESULT_DIR?Launch with python -m experiments run}"
+LOG_DIR="${LOG_DIR:-$RESULT_DIR/logs}"
+MANIFEST="${MANIFEST:-$RESULT_DIR/pending_methods.tsv}"
+COLLECTED_CSV="${COLLECTED_CSV:-$RESULT_DIR/capped_method_results.csv}"
+CONFIG_FILE="$RESULT_DIR/run_config.env"
+RESUME_TOOL="$SCRIPT_DIR/capped_scalability_resume.py"
+
+source "$SCRIPT_DIR/environment.sh"
+
+require_positive_integer WORKERS "$WORKERS"
+require_positive_integer REPS "$REPS"
+require_positive_integer METHOD_TIME_LIMIT_SECONDS "$METHOD_TIME_LIMIT_SECONDS"
+require_nonnegative_integer RETRY_ERRORS "$RETRY_ERRORS"
+require_nonnegative_integer DRY_RUN "$DRY_RUN"
+require_nonnegative_integer STOCHASTIC_N_RANDOM_STARTS "$STOCHASTIC_N_RANDOM_STARTS"
+require_nonnegative_integer STAGNATION_WINDOW "$STAGNATION_WINDOW"
+
+if [[ ! -d "$LEGACY_RESULT_DIR" ]]; then
+  echo "Legacy result directory not found: $LEGACY_RESULT_DIR" >&2
+  exit 2
+fi
+if [[ ! -f "$RESUME_TOOL" ]]; then
+  echo "Resume utility not found: $RESUME_TOOL" >&2
+  exit 2
+fi
+if (( DRY_RUN == 0 )) && ! command -v timeout >/dev/null 2>&1; then
+  echo "Method caps require GNU timeout (available by default on Ubuntu)." >&2
+  exit 2
+fi
+
+# Do not compete with the old uncapped workers.  Their output files are empty
+# until all methods finish, so concurrent capped jobs would duplicate work.
+active_legacy_lock="$(find "$LEGACY_RESULT_DIR" -maxdepth 1 -type d -name '.cvar_*.lock' -print -quit)"
+if [[ -n "$active_legacy_lock" ]]; then
+  echo "An uncapped legacy worker lock is still present: $active_legacy_lock" >&2
+  echo "Stop the old runner and its workers before starting the capped resume." >&2
+  exit 2
+fi
+
+mkdir -p "$RESULT_DIR" "$LOG_DIR"
+
+run_config="$(printf '%s\n' \
+  "risk=$RISK_GRID" \
+  "K_GRID=$K_GRID" \
+  "N_GRID=$N_GRID" \
+  "REPS=$REPS" \
+  "SEED_BASE=$SEED_BASE" \
+  "METHODS=$METHODS" \
+  "GAMMA=$GAMMA" \
+  "ALPHA=$ALPHA" \
+  "EPSILON=$EPSILON" \
+  "STOCHASTIC_REGRET_TOLERANCE=$STOCHASTIC_REGRET_TOLERANCE" \
+  "MAX_CANDIDATES=$MAX_CANDIDATES" \
+  "N_SCREEN_STARTS=$N_SCREEN_STARTS" \
+  "N_SUPPORT_STARTS=$N_SUPPORT_STARTS" \
+  "SCREEN_MAXITER=$SCREEN_MAXITER" \
+  "SUPPORT_MAXITER=$SUPPORT_MAXITER" \
+  "MAX_ITER=$MAX_ITER" \
+  "CERTIFY_EVERY=$CERTIFY_EVERY" \
+  "SOLVER=$SOLVER" \
+  "FALLBACK_SOLVER=$FALLBACK_SOLVER" \
+  "WORKERS=$WORKERS" \
+  "METHOD_TIME_LIMIT_SECONDS=$METHOD_TIME_LIMIT_SECONDS" \
+  "LEGACY_RESULT_DIR=$LEGACY_RESULT_DIR")"
+if [[ -n "$EPSILON_SCR" ]]; then
+  run_config+=$'\n'"EPSILON_SCR=$EPSILON_SCR"
+fi
+if [[ "$PAYOFF_MODEL" != "uniform" ]]; then
+  run_config+=$'\n'"PAYOFF_MODEL=$PAYOFF_MODEL"
+fi
+# Old configurations used zero random starts. Preserve that resume mode, while
+# refusing to mix new restart runs into the old single-start campaign.
+if [[ "$METHODS" == *stochastic_* ]] && (( STOCHASTIC_N_RANDOM_STARTS > 0 )); then
+  run_config+=$'\n'"STOCHASTIC_N_RANDOM_STARTS=$STOCHASTIC_N_RANDOM_STARTS"
+fi
+if [[ "$METHODS" == *stochastic_* ]] && (( STAGNATION_WINDOW > 0 )); then
+  run_config+=$'\n'"STAGNATION_WINDOW=$STAGNATION_WINDOW"
+  run_config+=$'\n'"STAGNATION_RTOL=$STAGNATION_RTOL"
+  run_config+=$'\n'"STAGNATION_ATOL=$STAGNATION_ATOL"
+fi
+# Unset optimizer overrides retain the historical Python defaults and config
+# format. Persist every supplied override so retuned FO jobs cannot reuse old runs.
+if [[ "$METHODS" == *stochastic_* ]]; then
+  for setting in STOCHASTIC_ENTROPY_KAPPA STOCHASTIC_SMOOTHING_TAU \
+    STOCHASTIC_MSD_STEP_SIZE STOCHASTIC_CVAR_STEP_SIZE STOCHASTIC_STEP_DECAY \
+    STOCHASTIC_LOGIT_BOUND STOCHASTIC_JIT_UPDATES; do
+    if [[ -n "${!setting:-}" ]]; then
+      run_config+=$'\n'"$setting=${!setting}"
+      export "$setting"
+    fi
+  done
+  if [[ -n "${STOCHASTIC_JIT_UPDATES:-}" && "$STOCHASTIC_JIT_UPDATES" != 0 && "$STOCHASTIC_JIT_UPDATES" != 1 ]]; then
+    echo "STOCHASTIC_JIT_UPDATES must be 0 or 1." >&2
+    exit 2
+  fi
+fi
+
+if [[ -f "$CONFIG_FILE" ]]; then
+  "$PYTHON_BIN" -m experiments.common.campaign --config "$CONFIG_FILE" --proposed "$run_config"
+
+else
+  printf '%s\n' "$run_config" > "$CONFIG_FILE"
+fi
+
+read -r -a risk_args <<< "$RISK_GRID"
+read -r -a K_args <<< "$K_GRID"
+read -r -a n_args <<< "$N_GRID"
+read -r -a method_args <<< "$METHODS"
+
+common_plan_args=(
+  --legacy-dir "$LEGACY_RESULT_DIR"
+  --result-dir "$RESULT_DIR"
+  --risk "${risk_args[@]}"
+  --K "${K_args[@]}"
+  --n "${n_args[@]}"
+  --reps "$REPS"
+  --seed-base "$SEED_BASE"
+  --methods "${method_args[@]}"
+  --time-limit-seconds "$METHOD_TIME_LIMIT_SECONDS"
+  --stochastic-n-random-starts "$STOCHASTIC_N_RANDOM_STARTS"
+  --payoff-model "$PAYOFF_MODEL"
+)
+
+plan_command=("$PYTHON_BIN" "$RESUME_TOOL" plan "${common_plan_args[@]}" --manifest "$MANIFEST")
+if (( RETRY_ERRORS != 0 )); then
+  plan_command+=(--retry-errors)
+fi
+"${plan_command[@]}"
+"$PYTHON_BIN" "$RESUME_TOOL" collect "${common_plan_args[@]}" --output "$COLLECTED_CSV"
+
+pending_count="$(wc -l < "$MANIFEST")"
+printf 'Capped resume: %s unresolved method runs; %s workers; cap=%ss; results=%s\n' \
+  "$pending_count" "$WORKERS" "$METHOD_TIME_LIMIT_SECONDS" "$RESULT_DIR"
+
+if (( DRY_RUN != 0 )); then
+  sed -n '1,40p' "$MANIFEST"
+  exit 0
+fi
+if (( pending_count == 0 )); then
+  exit 0
+fi
+
+if [[ " $METHODS " == *" mcp "* || " $METHODS " == *" restricted_mcp "* ]]; then
+  "$PYTHON_BIN" -c '
+import sys
+from cumg import format_solver_availability, solver_available
+
+solver = sys.argv[1]
+fallback = sys.argv[2]
+names = [solver] + ([] if fallback.lower() == "none" else [fallback])
+print(format_solver_availability(names))
+if not solver_available(solver):
+    raise SystemExit(f"Required solver is unavailable: {solver}")
+' "$SOLVER" "$FALLBACK_SOLVER"
+fi
+
+# Keep each worker single-threaded.  Parallelism is across independent methods.
+
+export PYTHON_BIN RESULT_DIR LOG_DIR REPS SEED_BASE
+export GAMMA ALPHA EPSILON EPSILON_SCR STOCHASTIC_REGRET_TOLERANCE
+export STOCHASTIC_N_RANDOM_STARTS
+export PAYOFF_MODEL
+export MAX_CANDIDATES N_SCREEN_STARTS N_SUPPORT_STARTS
+export SCREEN_MAXITER SUPPORT_MAXITER MAX_ITER CERTIFY_EVERY
+export STAGNATION_WINDOW STAGNATION_RTOL STAGNATION_ATOL
+export SOLVER FALLBACK_SOLVER METHOD_TIME_LIMIT_SECONDS RETRY_ERRORS RESUME_TOOL
+
+xargs -n 6 -P "$WORKERS" bash -c '
+  set -euo pipefail
+
+  risk="$1"
+  K="$2"
+  n="$3"
+  rep="$4"
+  method="$5"
+  seed="$6"
+  rep_stop=$((rep + 1))
+  replicate_stem=$(printf "%s_K%s_n%s_rep%03d" "$risk" "$K" "$n" "$rep")
+  method_stem="${replicate_stem}__${method}"
+  shard_dir="$RESULT_DIR/method_shards/$method"
+  out="$shard_dir/${method_stem}.csv"
+  partial="$shard_dir/${method_stem}.partial.csv"
+  status_marker="$shard_dir/${method_stem}.status.json"
+  lock_dir="$shard_dir/.${method_stem}.lock"
+  mkdir -p "$shard_dir"
+
+  if [[ -s "$out" ]] && [[ "$(wc -l < "$out")" -eq 2 ]]; then
+    echo "SKIP complete: $method_stem"
+    exit 0
+  fi
+  retry_error_marker=0
+  if [[ -s "$status_marker" ]]; then
+    if (( RETRY_ERRORS != 0 )) \
+      && grep -Eq "\"status\"[[:space:]]*:[[:space:]]*\"error\"" "$status_marker"; then
+      retry_error_marker=1
+    else
+      echo "SKIP status recorded: $method_stem"
+      exit 0
+    fi
+  fi
+  if ! mkdir "$lock_dir" 2>/dev/null; then
+    echo "SKIP locked: $method_stem" >&2
+    exit 0
+  fi
+  trap '\''rmdir "$lock_dir" 2>/dev/null || true'\'' EXIT INT TERM
+
+  attempt=0
+  while :; do
+    log=$(printf "%s/%s_attempt%03d.log" "$LOG_DIR" "$method_stem" "$attempt")
+    status_archive=$(printf "%s/%s_status_before_attempt%03d.json" \
+      "$LOG_DIR" "$method_stem" "$attempt")
+    [[ -e "$log" || -e "$status_archive" ]] || break
+    attempt=$((attempt + 1))
+  done
+
+  if (( retry_error_marker != 0 )); then
+    # The lock makes archiving and retrying atomic with respect to other runners.
+    # Timeout markers are deliberately never retried by this switch.
+    if [[ ! -s "$status_marker" ]] \
+      || ! grep -Eq "\"status\"[[:space:]]*:[[:space:]]*\"error\"" "$status_marker"; then
+      echo "SKIP retry marker changed: $method_stem" >&2
+      exit 0
+    fi
+    mv "$status_marker" "$status_archive"
+    echo "RETRY error: $method_stem (previous marker: $status_archive)"
+  fi
+
+  command=(
+    "$PYTHON_BIN" -m experiments.runners.compare_scalability_approaches
+    --risk "$risk"
+    --K "$K"
+    --n "$n"
+    --reps "$REPS"
+    --rep-start "$rep"
+    --rep-stop "$rep_stop"
+    --seed-base "$SEED_BASE"
+    --gamma "$GAMMA"
+    --alpha "$ALPHA"
+    --epsilon "$EPSILON"
+    --stochastic-regret-tolerance "$STOCHASTIC_REGRET_TOLERANCE"
+    --stochastic-n-random-starts "$STOCHASTIC_N_RANDOM_STARTS"
+    --payoff-model "$PAYOFF_MODEL"
+    --max-candidates "$MAX_CANDIDATES"
+    --n-screen-starts "$N_SCREEN_STARTS"
+    --n-support-starts "$N_SUPPORT_STARTS"
+    --screen-maxiter "$SCREEN_MAXITER"
+    --support-maxiter "$SUPPORT_MAXITER"
+    --max-iter "$MAX_ITER"
+    --certify-every "$CERTIFY_EVERY"
+    --stagnation-window "$STAGNATION_WINDOW"
+    --stagnation-rtol "$STAGNATION_RTOL"
+    --stagnation-atol "$STAGNATION_ATOL"
+    --solver "$SOLVER"
+    --fallback-solver "$FALLBACK_SOLVER"
+    --methods "$method"
+    --csv "$partial"
+    --save-profiles
+    --quiet
+  )
+  if [[ -n "$EPSILON_SCR" ]]; then
+    command+=(--epsilon-scr "$EPSILON_SCR")
+  fi
+  if [[ "$method" == stochastic_* ]]; then
+    [[ -z "${STOCHASTIC_ENTROPY_KAPPA:-}" ]] || command+=(--entropy-kappa "$STOCHASTIC_ENTROPY_KAPPA")
+    [[ -z "${STOCHASTIC_SMOOTHING_TAU:-}" ]] || command+=(--smoothing-tau "$STOCHASTIC_SMOOTHING_TAU")
+    [[ -z "${STOCHASTIC_STEP_DECAY:-}" ]] || command+=(--step-decay "$STOCHASTIC_STEP_DECAY")
+    [[ -z "${STOCHASTIC_LOGIT_BOUND:-}" ]] || command+=(--logit-bound "$STOCHASTIC_LOGIT_BOUND")
+    case "$risk" in
+      msd) step_size="${STOCHASTIC_MSD_STEP_SIZE:-}" ;;
+      cvar) step_size="${STOCHASTIC_CVAR_STEP_SIZE:-}" ;;
+    esac
+    [[ -z "$step_size" ]] || command+=(--step-size "$step_size")
+    # CVaR retains the selected shared learning rate for logits and thresholds.
+    if [[ "${STOCHASTIC_JIT_UPDATES:-0}" == 1 ]]; then
+      command+=(--jit-updates)
+    fi
+  fi
+  if [[ "$method" == "qptas" || "$method" == "qptas_screened" || "$method" == stochastic_* ]]; then
+    # Numerical failures must produce retryable error markers, not completed CSV shards.
+    command+=(--fail-on-error)
+  fi
+
+  started_epoch=$(date +%s)
+  echo "START $(date "+%Y-%m-%dT%H:%M:%S%z") risk=$risk K=$K n=$n rep=$rep method=$method seed=$seed" \
+    | tee "$log"
+  set +e
+  timeout --signal=TERM --kill-after=60s "$METHOD_TIME_LIMIT_SECONDS" \
+    "${command[@]}" >> "$log" 2>&1
+  status=$?
+  set -e
+  ended_epoch=$(date +%s)
+  elapsed_s=$((ended_epoch - started_epoch))
+
+  if (( status == 0 )); then
+    line_count=0
+    [[ -f "$partial" ]] && line_count=$(wc -l < "$partial")
+    if (( line_count == 2 )); then
+      mv "$partial" "$out"
+      outcome="completed"
+    else
+      status=70
+      outcome="error"
+      "$PYTHON_BIN" "$RESUME_TOOL" record-status \
+        --result-dir "$RESULT_DIR" --risk "$risk" --K "$K" --n "$n" --rep "$rep" \
+        --method "$method" --seed-base "$SEED_BASE" --status error \
+        --elapsed-s "$elapsed_s" --time-limit-seconds "$METHOD_TIME_LIMIT_SECONDS" \
+        --exit-code "$status" --message "Process exited successfully but did not write one CSV row." \
+        >> "$log" 2>&1
+    fi
+  elif (( status == 124 )); then
+    outcome="timeout"
+    "$PYTHON_BIN" "$RESUME_TOOL" record-status \
+      --result-dir "$RESULT_DIR" --risk "$risk" --K "$K" --n "$n" --rep "$rep" \
+      --method "$method" --seed-base "$SEED_BASE" --status timeout \
+      --elapsed-s "$elapsed_s" --time-limit-seconds "$METHOD_TIME_LIMIT_SECONDS" \
+      --exit-code "$status" --message "GNU timeout reached the per-method wall-clock cap." \
+      >> "$log" 2>&1
+  else
+    outcome="error"
+    "$PYTHON_BIN" "$RESUME_TOOL" record-status \
+      --result-dir "$RESULT_DIR" --risk "$risk" --K "$K" --n "$n" --rep "$rep" \
+      --method "$method" --seed-base "$SEED_BASE" --status error \
+      --elapsed-s "$elapsed_s" --time-limit-seconds "$METHOD_TIME_LIMIT_SECONDS" \
+      --exit-code "$status" --message "Method process exited nonzero; inspect its attempt log." \
+      >> "$log" 2>&1
+  fi
+
+  echo "END $(date "+%Y-%m-%dT%H:%M:%S%z") status=$status outcome=$outcome risk=$risk K=$K n=$n rep=$rep method=$method" \
+    | tee -a "$log"
+' _ < "$MANIFEST"
+
+"$PYTHON_BIN" "$RESUME_TOOL" collect "${common_plan_args[@]}" --output "$COLLECTED_CSV"
