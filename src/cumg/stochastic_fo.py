@@ -54,6 +54,7 @@ class StochasticFOConfig:
     n_random_starts: int = 4
     jit_updates: bool = False
     theta_step_size: float | None = None
+    capture_certificates: bool = False
 
 
 @dataclass(frozen=True)
@@ -543,6 +544,8 @@ def _run_stochastic_fo(
                 include_theta,
                 checkpoint,
             )
+        elif config.capture_certificates and checkpoint is not None:
+            history.append(dict(checkpoint))
         if checkpoint is not None and checkpoint["eta"] <= config.regret_tolerance:
             return (
                 params,
@@ -619,6 +622,8 @@ def _run_stochastic_fo(
                     include_theta,
                     checkpoint,
                 )
+            elif config.capture_certificates and checkpoint is not None:
+                history.append(dict(checkpoint))
             if should_certify:
                 if checkpoint is not None and checkpoint["eta"] <= config.regret_tolerance:
                     termination_reason = "regret_tolerance"

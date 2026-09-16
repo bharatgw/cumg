@@ -9,7 +9,7 @@ pd = pytest.importorskip("pandas")
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "experiments"))
 
-import scalability_analysis as analysis  # noqa: E402
+from experiments.analysis import scalability_analysis as analysis  # noqa: E402
 
 
 def test_capped_results_to_wide_recovers_metadata_from_completed_method() -> None:

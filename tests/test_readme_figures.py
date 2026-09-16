@@ -10,7 +10,7 @@ pd = pytest.importorskip("pandas")
 pytest.importorskip("matplotlib")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "experiments"))
 
-import generate_readme_figures as figures  # noqa: E402
+from experiments.analysis import generate_readme_figures as figures  # noqa: E402
 
 
 def test_common_certificate_success_ignores_native_flags_and_rejects_nonfinite_eta():
@@ -122,11 +122,11 @@ def test_loader_adds_qptas_for_both_risks_and_checks_seed_cohorts(monkeypatch, c
     uniform = capped.loc[capped["method"].eq("mcp"), ["risk", "K", "n", "seed"]].copy()
     uniform = uniform.assign(uniform_eta=0.01, uniform_success=True, uniform_time_s=0.01)
     files = {
-        figures.RESULTS_DIR / "remote/cvar_scalability/capped_24h_v1/capped_method_results.csv": legacy.loc[
+        figures.RESULTS_DIR / "scalability/cvar_capped_24h_v1/capped_method_results.csv": legacy.loc[
             legacy["risk"].eq("cvar")
         ],
-        figures.RESULTS_DIR / "remote/qptas_scalability/sampled_1000_v1/capped_method_results.csv": qptas,
-        figures.RESULTS_DIR / "uniform/uniform_profile_baseline.csv": uniform,
+        figures.RESULTS_DIR / "qptas_scalability/sampled_1000_v1/capped_method_results.csv": qptas,
+        figures.RESULTS_DIR / "uniform_baseline/v1/uniform_profile_baseline.csv": uniform,
     }
     monkeypatch.setattr(figures.sa, "load_csv_shards", lambda *args: msd_wide.copy())
     monkeypatch.setattr(figures.pd, "read_csv", lambda path: files[path].copy())

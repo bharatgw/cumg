@@ -42,9 +42,9 @@ Sampled QPTAS checks up to 1,000 distinct joint profiles with
 attempt, whether or not it produced a certificate. The uniform baseline's
 runtime measures full-regret certification of the fixed uniform profile,
 excluding game generation. It comes from the separately timed baseline runs.
-The stochastic full-batch and minibatch methods are omitted from both figures
-for now; their saved histories do not isolate the iteration-zero certificate's
-runtime.
+The stochastic full-batch and minibatch methods are omitted from these
+uniform-game figures; their saved histories do not isolate the iteration-zero
+certificate's runtime. The separate population campaign below includes both FO methods.
 
 ### Runtime scaling
 
@@ -96,16 +96,56 @@ These comparisons are descriptive of the committed random-instance design and
 fixed algorithm configurations. They do not establish asymptotic dominance,
 and capped CVaR runtimes should not be interpreted as completed solve times.
 
-Regenerate the two figures from the curated results with:
+Regenerate the README figures from the curated results with:
 
 ```bash
-python experiments/generate_readme_figures.py
+python -m experiments.analysis.generate_readme_figures
 ```
 
-The source notebook is [`experiments/mcpAlgoAnalysis.ipynb`](experiments/mcpAlgoAnalysis.ipynb).
+The source notebook is [`experiments/analysis/mcpAlgoAnalysis.ipynb`](experiments/analysis/mcpAlgoAnalysis.ipynb).
 See [`experiments/results/README.md`](experiments/results/README.md) for dataset
 provenance and [`experiments/REMOTE_SCALABILITY.md`](experiments/REMOTE_SCALABILITY.md)
 for the remote-run and capped-resume protocol.
+
+## Heterogeneous payoff populations (`beta_uniform_v2`)
+
+This separate campaign uses `n=50`, `K ∈ {500, 1000, 2000, 4000}`, and 20
+matched game seeds per `(risk, K)` cell. Each player's payoff-matrix cell is
+assigned uniformly at random to Beta(1,4), Beta(2,3), Beta(3,2), Beta(4,1),
+or Uniform[0,1], then sampled K times from that population. Risk parameters
+remain `gamma=0.5` and CVaR `alpha=0.5`.
+
+![Population v2 attempt runtimes and recorded certificate success for MSD and CVaR](docs/figures/population_beta_uniform_v2.png)
+
+*Runtime includes all 20 attempts per cell, successful or unsuccessful; bands
+are interquartile ranges. Success requires a completed run with finite recorded
+η ≤ 0.01; crosses mark fewer than five successful seeds. Separate bar positions
+show both QPTAS variants even when their success rates are zero.*
+
+FO uses up to 2,000 updates per start, starting uniformly and trying up to four
+random restarts only when needed. It checks regret every 100 updates and stops
+a start on stagnation. Calibrated settings are entropy weight 0.01, smoothing
+tau 0.002, initial step 1000 (MSD) or 500 (CVaR), decay 0.5, and logit bound 20.
+Both sampled QPTAS variants have a 1,000-candidate budget and `kappa=8`;
+screening uses `tau=ceil(sqrt(K))` and tolerance `2 epsilon / 3`.
+
+Across all K values, FO full batch records **38/80 MSD** and **32/80 CVaR**
+successes; minibatch records **28/80 MSD** and **37/80 CVaR**. Both QPTAS
+variants record zero successes. Screened QPTAS rejects every sampled pair
+before any best-response LP, so its shorter runtime measures budget
+exhaustion, not faster equilibrium solving. All 640 attempts completed without
+timeouts. These are recorded certificates: the campaign did not save final FO
+strategies, so they cannot be independently recomputed from the saved outputs.
+A bounded local replay of three game seeds produced different FO regrets in all
+six comparisons and one success-classification change. The recorded remote
+NumPy version differs and original input hashes are unavailable; these remain
+descriptive recorded outcomes, not a fully reproduced campaign. See the
+[audit report](experiments/results/audits/consolidation_20260915/README.md).
+
+The [campaign configuration](experiments/POPULATION_QPTAS_FO.md) and
+[raw results](experiments/results/population_qptas_fo/beta_uniform_v2/capped_method_results.csv)
+are separate from the uniform-game comparison above. Regenerate only this figure with
+`python -m experiments.analysis.generate_readme_figures --study population`.
 
 ## Installation
 
@@ -237,7 +277,7 @@ raise an exception rather than report grid exhaustion.
 
 For a remote MSD/CVaR campaign with 1,000 sampled profiles per run,
 `epsilon=0.01`, and `kappa=ceil(sqrt(n))`, use
-[`experiments/run_qptas_scalability_remote.sh`](experiments/run_qptas_scalability_remote.sh).
+`python -m experiments run --campaign qptas_scalability/sampled_1000_v1`.
 See [the QPTAS remote-run guide](experiments/QPTAS_REMOTE.md) for the matching
 scalability grid, environment overrides, time caps, and resume instructions.
 
@@ -252,17 +292,27 @@ scalability grid, environment overrides, time caps, and resume instructions.
 - `docs/figures/`: static figures generated from the curated results.
 - `notebooks/`: exploratory notebooks retained for reference.
 
+Use [the experiment guide](experiments/README.md) for the consolidated campaign
+commands, presets, result catalog, and certificate audits.
+
 ## Development checks
 
 ```bash
-python -m compileall src tests examples experiments/generate_readme_figures.py
+python -m compileall src tests examples experiments/{common,runners,diagnostics} experiments/analysis/*.py experiments/__*.py
 pytest
-ruff check src tests examples experiments/generate_readme_figures.py
-ruff format --check src tests examples experiments/generate_readme_figures.py
+ruff check src tests examples experiments/{common,runners,diagnostics} experiments/analysis/*.py experiments/__*.py
+ruff format --check src tests examples experiments/{common,runners,diagnostics} experiments/analysis/*.py experiments/__*.py
 ```
 
 Solver-gated tests are marked with `pytest.mark.solver` and skip when
 PATH/PATHAMPL or IPOPT is unavailable.
+
+## AI assistance
+
+OpenAI Codex was used to assist with code implementation and refactoring,
+debugging, experiment setup and analysis, figure generation, reproducibility
+checks, and documentation. The authors remain responsible for the code,
+reported results, and scientific conclusions.
 
 ## Citation
 

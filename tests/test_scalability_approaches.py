@@ -12,7 +12,7 @@ pytest.importorskip("jax")
 from cumg.results import SupportSearchResult
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / "experiments" / "compare_scalability_approaches.py"
+SCRIPT = ROOT / "experiments" / "runners/compare_scalability_approaches.py"
 SPEC = importlib.util.spec_from_file_location("compare_scalability_approaches", SCRIPT)
 assert SPEC is not None and SPEC.loader is not None
 compare_scalability_approaches = importlib.util.module_from_spec(SPEC)

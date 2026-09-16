@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / "experiments" / "uniform_profile_baseline.py"
+SCRIPT = ROOT / "experiments" / "runners" / "uniform_profile_baseline.py"
 SPEC = importlib.util.spec_from_file_location("uniform_profile_baseline", SCRIPT)
 assert SPEC is not None and SPEC.loader is not None
 uniform_profile_baseline = importlib.util.module_from_spec(SPEC)
@@ -14,7 +14,7 @@ SPEC.loader.exec_module(uniform_profile_baseline)
 
 
 def test_default_outputs_use_curated_uniform_directory():
-    expected = ROOT / "experiments" / "results" / "uniform"
+    expected = ROOT / "experiments" / "results" / "uniform_baseline" / "v1"
 
     assert uniform_profile_baseline.DEFAULT_RESULT_DIR == expected
     assert uniform_profile_baseline.DEFAULT_CSV == expected / "uniform_profile_baseline.csv"

@@ -10,7 +10,7 @@ import pytest
 pytest.importorskip("jax")
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / "experiments" / "compare_stochastic_fo.py"
+SCRIPT = ROOT / "experiments" / "runners/compare_stochastic_fo.py"
 SPEC = importlib.util.spec_from_file_location("compare_stochastic_fo", SCRIPT)
 assert SPEC is not None and SPEC.loader is not None
 compare_stochastic_fo = importlib.util.module_from_spec(SPEC)

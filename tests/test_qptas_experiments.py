@@ -1,7 +1,6 @@
 import csv
 import json
 import os
-import shlex
 import shutil
 import subprocess
 import sys
@@ -13,12 +12,8 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "experiments"))
 
-import compare_scalability_approaches as driver  # noqa: E402
-
 from cumg.small_support import full_cvar_regret, full_msd_regret  # noqa: E402
-
-RUNNER = ROOT / "experiments" / "run_qptas_scalability_remote.sh"
-POPULATION_RUNNER = ROOT / "experiments" / "run_population_qptas_fo_remote.sh"
+from experiments.runners import compare_scalability_approaches as driver  # noqa: E402
 
 
 @pytest.fixture
@@ -227,411 +222,174 @@ def test_population_driver_rejects_rescaling(qptas_args):
         driver.run_instance(qptas_args, "msd", K=2, n=2, seed=123)
 
 
-@pytest.fixture
-def runner_env(tmp_path):
-    # Use explicit settings so user shell overrides cannot enlarge a test run.
-    return {
-        "PATH": os.environ["PATH"],
-        "PYTHON_BIN": sys.executable,
+def campaign_preset(tmp_path, *, tiny=False, gamma=0.5, source="population_qptas_fo/beta_uniform_v2"):
+    data = json.loads((ROOT / "experiments/configs" / (source + ".json")).read_text())
+    data["campaign"] = "test/fresh"
+    data["result_dir"] = str(tmp_path / "results")
+    data["historical_env"]["LEGACY_RESULT_DIR"] = str(tmp_path / "legacy")
+    if tiny:
+        data["historical_env"].update(
+            K_GRID="2",
+            N_GRID="2",
+            REPS="1",
+            WORKERS="1",
+            MAX_ITER="3",
+            CERTIFY_EVERY="1",
+            STAGNATION_WINDOW="1",
+            STAGNATION_RTOL="1",
+            STAGNATION_ATOL="0",
+            MAX_CANDIDATES="2",
+            GAMMA=str(gamma),
+        )
+    path = tmp_path / "preset.json"
+    path.write_text(json.dumps(data))
+    return path, data
+
+
+def campaign_command(path, command="run", *extra):
+    return [sys.executable, "-m", "experiments", command, "--campaign", "test/fresh", "--config", str(path), *extra]
+
+
+def execute_campaign(path, command="run", *extra):
+    env = {
+        **os.environ,
         "PYTHONDONTWRITEBYTECODE": "1",
-        "RESULT_DIR": str(tmp_path / "results"),
         "OMP_NUM_THREADS": "1",
         "OPENBLAS_NUM_THREADS": "1",
         "VECLIB_MAXIMUM_THREADS": "1",
     }
-
-
-def test_qptas_shell_default_plan(runner_env):
-    result = subprocess.run(
-        ["bash", str(RUNNER)],
-        env={**runner_env, "DRY_RUN": "1"},
-        capture_output=True,
-        text=True,
-        timeout=60,
+    return subprocess.run(
+        campaign_command(path, command, *extra), cwd=ROOT, env=env, capture_output=True, text=True, timeout=90
     )
-    assert result.returncode == 0, result.stdout + result.stderr
-    directory = Path(runner_env["RESULT_DIR"])
-    rows = [line.split("\t") for line in (directory / "pending_methods.tsv").read_text().splitlines()]
-    assert len(rows) == 960
-    assert {row[0] for row in rows} == {"msd", "cvar"}
-    assert {int(row[1]) for row in rows} == {5, 10, 30, 100, 250, 500}
-    assert {int(row[2]) for row in rows} == {5, 10, 20, 50}
-    assert {int(row[3]) for row in rows} == set(range(20))
-    assert {row[4] for row in rows} == {"qptas"}
-    for risk, K, n, rep, _, seed in rows:
-        assert int(seed) == driver.experiment_seed(risk, int(K), int(n), int(rep), 123)
-    config = (directory / "run_config.env").read_text().splitlines()
-    assert {"EPSILON=0.01", "MAX_CANDIDATES=1000", "WORKERS=8", "METHOD_TIME_LIMIT_SECONDS=86400"} <= set(config)
 
 
-def test_population_shell_default_plan(runner_env):
-    result = subprocess.run(
-        ["bash", str(POPULATION_RUNNER)],
-        env={**runner_env, "DRY_RUN": "1"},
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
-    assert result.returncode == 0, result.stdout + result.stderr
-    directory = Path(runner_env["RESULT_DIR"])
-    rows = [line.split("\t") for line in (directory / "pending_methods.tsv").read_text().splitlines()]
-    assert len(rows) == 640
-    assert {row[0] for row in rows} == {"msd", "cvar"}
-    assert {int(row[1]) for row in rows} == {500, 1000, 2000, 4000}
-    assert {int(row[2]) for row in rows} == {50}
-    assert {int(row[3]) for row in rows} == set(range(20))
-    assert {row[4] for row in rows} == {"qptas", "qptas_screened", "stochastic_full_batch", "stochastic_minibatch"}
-    for risk, K, n, rep, _, seed in rows:
-        assert int(seed) == driver.experiment_seed(risk, int(K), int(n), int(rep), 123)
-    config = set((directory / "run_config.env").read_text().splitlines())
-    assert {
-        "EPSILON=0.01",
-        "STOCHASTIC_REGRET_TOLERANCE=0.01",
-        "STOCHASTIC_N_RANDOM_STARTS=4",
-        "STOCHASTIC_ENTROPY_KAPPA=0.01",
-        "STOCHASTIC_SMOOTHING_TAU=0.002",
-        "STOCHASTIC_MSD_STEP_SIZE=1000",
-        "STOCHASTIC_CVAR_STEP_SIZE=500",
-        "STOCHASTIC_STEP_DECAY=0.5",
-        "STOCHASTIC_LOGIT_BOUND=20",
-        "STOCHASTIC_JIT_UPDATES=1",
-        "PAYOFF_MODEL=cell_beta_uniform_v1",
-        "MAX_ITER=2000",
-        "MAX_CANDIDATES=1000",
-        "WORKERS=8",
-        "CERTIFY_EVERY=100",
-        "STAGNATION_WINDOW=500",
-        "STAGNATION_RTOL=0.005",
-        "STAGNATION_ATOL=0.00001",
-        "GAMMA=0.5",
-        "ALPHA=0.5",
-        "METHOD_TIME_LIMIT_SECONDS=86400",
-    } <= config
-
-    # Simulate a saved pre-extension v2 config plus a completed original-method
-    # shard. Replanning must add the method/K cells without rerunning that shard.
-    config_path = directory / "run_config.env"
-    previous_config = (
-        config_path.read_text()
-        .replace("K_GRID=500 1000", "K_GRID=1000")
-        .replace("METHODS=qptas qptas_screened ", "METHODS=qptas ")
-    )
-    config_path.write_text(previous_config)
-    shard = directory / "method_shards/qptas/msd_K1000_n50_rep000__qptas.csv"
-    shard.parent.mkdir(parents=True)
-    shard.write_text("payoff_model,qptas_time_s,qptas_success,qptas_eta\ncell_beta_uniform_v1,1,True,0.005\n")
-    original_mtime = shard.stat().st_mtime_ns
-    expanded = subprocess.run(
-        ["bash", str(POPULATION_RUNNER)],
-        env={**runner_env, "DRY_RUN": "1"},
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
-    assert expanded.returncode == 0, expanded.stdout + expanded.stderr
-    archives = list(directory.glob("run_config.before_extension_*.env"))
-    assert len(archives) == 1
-    assert archives[0].read_text() == previous_config
-    rows = [line.split("\t") for line in (directory / "pending_methods.tsv").read_text().splitlines()]
-    assert len(rows) == 639
-    assert sum(row[4] == "qptas_screened" for row in rows) == 160
-    assert sum(row[1] == "500" for row in rows) == 160
-    assert not any(row[:5] == ["msd", "1000", "50", "0", "qptas"] for row in rows)
-    assert shard.stat().st_mtime_ns == original_mtime
-
-
-@pytest.mark.parametrize("changed_setting", [None, "STOCHASTIC_MSD_STEP_SIZE", "STOCHASTIC_CVAR_STEP_SIZE"])
-def test_population_shell_rejects_old_optimizer_config(runner_env, changed_setting):
-    env = {**runner_env, "DRY_RUN": "1"}
-    initial = subprocess.run(["bash", str(POPULATION_RUNNER)], env=env, capture_output=True, text=True, timeout=60)
-    assert initial.returncode == 0, initial.stdout + initial.stderr
-    directory = Path(env["RESULT_DIR"])
-    config_path = directory / "run_config.env"
-    original = config_path.read_text()
-    if changed_setting is None:
-        # Old v2 configs omitted optimizer settings and used the Python defaults.
-        old_keys = {
-            "STOCHASTIC_ENTROPY_KAPPA",
-            "STOCHASTIC_SMOOTHING_TAU",
-            "STOCHASTIC_MSD_STEP_SIZE",
-            "STOCHASTIC_CVAR_STEP_SIZE",
-            "STOCHASTIC_STEP_DECAY",
-            "STOCHASTIC_LOGIT_BOUND",
-            "STOCHASTIC_JIT_UPDATES",
-        }
-        original = "".join(line + "\n" for line in original.splitlines() if line.split("=", 1)[0] not in old_keys)
-        config_path.write_text(original)
-    else:
-        env[changed_setting] = "1"
-    rejected = subprocess.run(["bash", str(POPULATION_RUNNER)], env=env, capture_output=True, text=True, timeout=60)
-    assert rejected.returncode == 2
-    assert "Configuration differs" in rejected.stderr
-    assert config_path.read_text() == original
-    assert not list(directory.glob("run_config.before_extension_*.env"))
+@pytest.mark.parametrize(
+    "source,expected", [("population_qptas_fo/beta_uniform_v2", 640), ("qptas_scalability/sampled_1000_v1", 960)]
+)
+def test_named_preset_plan_does_not_write_or_launch(tmp_path, source, expected):
+    path, data = campaign_preset(tmp_path, source=source)
+    result = execute_campaign(path, "plan")
+    assert result.returncode == 0, result.stderr
+    report = json.loads(result.stdout)
+    assert report["expected"] == report["pending"] == expected
+    assert len(report["pending_tasks"]) == expected
+    assert not Path(data["result_dir"]).exists()
 
 
 @pytest.mark.skipif(shutil.which("timeout") is None, reason="Requires GNU timeout")
 @pytest.mark.parametrize("gamma", [0.5, -1])
-def test_population_shell_runs_and_resumes_all_four_methods(runner_env, gamma):
+def test_named_campaign_runs_all_methods_and_resumes(tmp_path, gamma):
     pytest.importorskip("jax")
-    env = {
-        **runner_env,
-        "K_GRID": "2",
-        "N_GRID": "2",
-        "REPS": "1",
-        "WORKERS": "1",
-        "MAX_ITER": "3",
-        "CERTIFY_EVERY": "1",
-        "STAGNATION_WINDOW": "1",
-        "STAGNATION_RTOL": "1",
-        "STAGNATION_ATOL": "0",
-        "MAX_CANDIDATES": "2",
-        "GAMMA": str(gamma),
-    }
-    run = subprocess.run(["bash", str(POPULATION_RUNNER)], env=env, capture_output=True, text=True, timeout=60)
-    assert run.returncode == 0, run.stdout + run.stderr
-    directory = Path(env["RESULT_DIR"])
-    with (directory / "capped_method_results.csv").open(newline="") as f:
-        rows = list(csv.DictReader(f))
+    path, data = campaign_preset(tmp_path, tiny=True, gamma=gamma)
+    result = execute_campaign(path)
+    assert result.returncode == 0, result.stdout + result.stderr
+    directory = Path(data["result_dir"])
+    with (directory / "capped_method_results.csv").open() as stream:
+        rows = list(csv.DictReader(stream))
     assert len(rows) == 8
-    assert {row["method"] for row in rows} == {
-        "qptas",
-        "qptas_screened",
-        "stochastic_full_batch",
-        "stochastic_minibatch",
-    }
-    for row in rows:
-        if gamma < 0:
-            assert row["status"] == "error" and row["success"] == "False"
-            continue
-        assert row["status"] == "completed" and row["error"] == ""
-        assert row["payoff_model"] == "cell_beta_uniform_v1"
-        *_, populations = driver.simulate_population_payoffs(K=2, n=2, seed=int(row["seed"]))
-        np.testing.assert_array_equal(json.loads(row["payoff_population_ids"]), populations)
-        if row["method"] in {"qptas", "qptas_screened"}:
-            assert 1 <= int(row["profiles_checked"]) <= 2
-            if row["method"] == "qptas_screened":
-                assert int(row["screen_rejections"]) + int(row["screen_passes"]) == int(row["profiles_checked"])
-                assert int(row["screen_passes"]) <= int(row["best_response_solves"]) <= 2 * int(row["screen_passes"])
-                assert row["total_pairs"] == "81"
-                assert (row["success"] == "True") == (float(row["eta"]) <= 0.01)
-        else:
-            assert float(row["stochastic_entropy_kappa"]) == 0.01
-            assert float(row["stochastic_smoothing_tau"]) == 0.002
-            assert float(row["stochastic_step_size"]) == (1000 if row["risk"] == "msd" else 500)
-            assert row["stochastic_theta_step_size"] == ("" if row["risk"] == "msd" else "500.0")
-            assert float(row["stochastic_step_decay"]) == 0.5
-            assert float(row["stochastic_logit_bound"]) == 20
-            assert row["stochastic_jit_updates"] == "True"
-            assert row["stochastic_certify_every"] == "1"
-            assert row["stochastic_stagnation_window"] == "1"
-            assert float(row["stochastic_stagnation_rtol"]) == 1
-            assert float(row["stochastic_stagnation_atol"]) == 0
-            starts = json.loads(row["start_summaries"])
-            assert 1 <= len(starts) == int(row["starts_attempted"]) <= 5
-            assert int(row["iterations"]) == sum(start["iterations"] for start in starts)
-            assert all(start["iterations"] <= 1 for start in starts)
-            assert all(start["termination_reason"] in {"stagnation", "regret_tolerance"} for start in starts)
-            assert all(start["termination_reason"] == "stagnation" for start in starts[:-1])
-            assert (row["success"] == "True") == (float(row["eta"]) <= 0.01)
-    shards = {p: p.stat().st_mtime_ns for p in (directory / "method_shards").rglob("*") if p.is_file()}
-    resumed = subprocess.run(["bash", str(POPULATION_RUNNER)], env=env, capture_output=True, text=True, timeout=60)
-    assert resumed.returncode == 0, resumed.stdout + resumed.stderr
-    assert (directory / "pending_methods.tsv").read_text() == ""
-    assert {p: p.stat().st_mtime_ns for p in shards} == shards
-
-    changed = subprocess.run(
-        ["bash", str(POPULATION_RUNNER)],
-        env={**env, "STAGNATION_WINDOW": "2", "DRY_RUN": "1"},
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
-    assert changed.returncode == 2
-    assert "Configuration differs" in changed.stderr
-
-
-@pytest.mark.skipif(shutil.which("timeout") is None, reason="Requires GNU timeout")
-def test_qptas_shell_runs_both_risks_and_resumes(runner_env):
-    env = {**runner_env, "K_GRID": "2", "N_GRID": "2", "REPS": "1", "WORKERS": "2", "MAX_CANDIDATES": "3"}
-    run = subprocess.run(["bash", str(RUNNER)], env=env, capture_output=True, text=True, timeout=60)
-    assert run.returncode == 0, run.stdout + run.stderr
-    directory = Path(env["RESULT_DIR"])
-    with (directory / "capped_method_results.csv").open(newline="") as f:
-        rows = list(csv.DictReader(f))
-    assert {row["risk"] for row in rows} == {"msd", "cvar"}
-    for row in rows:
-        assert row["status"] == "completed"
-        assert row["censored"] == "False"
-        assert row["method"] == "qptas"
-        assert row["sampling_seed"] == row["seed"]
-        assert row["support_kappa"] == "2"
-        assert row["total_profiles"] == "9"
-        assert 1 <= int(row["profiles_checked"]) <= 3
-        assert row["error"] == ""
-        if row["success"] == "True":
-            assert float(row["eta"]) <= 0.01
-            assert row["termination_reason"] == "epsilon_reached"
-        else:
-            assert row["termination_reason"] == "sample_exhausted"
-            assert row["profiles_checked"] == "3"
-    shards = {p: p.stat().st_mtime_ns for p in (directory / "method_shards").rglob("*.csv")}
-    assert len(shards) == 2
-    resumed = subprocess.run(["bash", str(RUNNER)], env=env, capture_output=True, text=True, timeout=60)
-    assert resumed.returncode == 0, resumed.stdout + resumed.stderr
-    assert (directory / "pending_methods.tsv").read_text() == ""
-    assert {p: p.stat().st_mtime_ns for p in shards} == shards
-    changed = subprocess.run(
-        ["bash", str(RUNNER)],
-        env={**env, "EPSILON": "0.02"},
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
-    assert changed.returncode == 2
-    assert "Configuration differs" in changed.stderr
-
-
-@pytest.mark.skipif(shutil.which("timeout") is None, reason="Requires GNU timeout")
-def test_qptas_shell_errors_are_retryable(runner_env):
-    env = {
-        **runner_env,
-        "RISK_GRID": "msd",
-        "K_GRID": "1",
-        "N_GRID": "1",
-        "REPS": "1",
-        "WORKERS": "1",
-        "GAMMA": "-1",  # Exercise the real Python error path and process exit status.
-    }
-    directory = Path(env["RESULT_DIR"])
-    for retry, expected_attempts in [("0", 1), ("0", 1), ("1", 2)]:
-        result = subprocess.run(
-            ["bash", str(RUNNER)],
-            env={**env, "RETRY_ERRORS": retry},
-            capture_output=True,
-            text=True,
-            timeout=60,
-        )
-        assert result.returncode == 0, result.stdout + result.stderr
-        with (directory / "capped_method_results.csv").open(newline="") as f:
-            row = next(csv.DictReader(f))
-        assert row["status"] == "error"
-        assert row["exit_code"] == "1"
-        assert row["success"] == "False"
-        assert row["censored"] == "False"
-        assert len(list((directory / "logs").glob("*_attempt*.log"))) == expected_attempts
-    assert len(list((directory / "logs").glob("*_status_before_attempt*.json"))) == 1
-    assert not (directory / "method_shards/qptas/msd_K1_n1_rep000__qptas.csv").exists()
-
-
-@pytest.mark.skipif(shutil.which("timeout") is None, reason="Requires GNU timeout")
-def test_qptas_shell_timeout_is_censored_and_not_retried(runner_env, tmp_path):
-    # Keep real planning/collection, but make the numerical subprocess exceed its cap.
-    launcher = tmp_path / "slow-python"
-    launcher.write_text(
-        "#!/usr/bin/env bash\n"
-        'if [[ "$1" == "experiments/compare_scalability_approaches.py" ]]; then\n'
-        "  exec sleep 10\n"
-        "fi\n"
-        f'exec {shlex.quote(sys.executable)} "$@"\n'
-    )
-    launcher.chmod(0o755)
-    env = {
-        **runner_env,
-        "PYTHON_BIN": str(launcher),
-        "RISK_GRID": "msd",
-        "K_GRID": "1",
-        "N_GRID": "1",
-        "REPS": "1",
-        "WORKERS": "1",
-        "METHOD_TIME_LIMIT_SECONDS": "1",
-    }
-    directory = Path(env["RESULT_DIR"])
-    for retry in ("0", "1"):
-        result = subprocess.run(
-            ["bash", str(RUNNER)],
-            env={**env, "RETRY_ERRORS": retry},
-            capture_output=True,
-            text=True,
-            timeout=60,
-        )
-        assert result.returncode == 0, result.stdout + result.stderr
-        with (directory / "capped_method_results.csv").open(newline="") as f:
-            row = next(csv.DictReader(f))
-        assert row["status"] == "timeout"
-        assert row["censored"] == "True"
-        assert row["time_s"] == "1"
-        assert row["exit_code"] == "124"
-        assert len(list((directory / "logs").glob("*_attempt*.log"))) == 1
-
-
-@pytest.mark.parametrize("rsync_exit", [0, 23])
-def test_qptas_sync_destination_success_counts_and_transfer_failure(runner_env, tmp_path, rsync_exit):
-    # Copy the standalone script to prove that its destination follows its checkout,
-    # including spaces, regardless of the caller's working directory.
-    checkout = tmp_path / "local checkout"
-    script = checkout / "experiments/sync_qptas_results.sh"
-    script.parent.mkdir(parents=True)
-    shutil.copyfile(ROOT / "experiments/sync_qptas_results.sh", script)
-    destination = checkout / "experiments/results/remote/qptas_scalability/sampled_1000_v1"
-    destination.mkdir(parents=True)
-    notes = destination / "local_notes.txt"
-    notes.write_text("keep this")
-    source_csv = tmp_path / "source.csv"
-    with source_csv.open("w", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerow(["risk", "method", "status", "success"])
-        writer.writerows(
-            [
-                ["msd", "qptas", "completed", "True"],
-                ["msd", "qptas", "completed", "False"],
-                ["msd", "qptas", "error", "False"],
-                ["cvar", "qptas", "completed", "True"],
-                ["cvar", "qptas", "completed", "False"],
-                ["cvar", "qptas", "timeout", "True"],  # Non-completed rows cannot count as successes.
-                ["msd", "mcp", "completed", "True"],  # Ignore other methods.
-            ]
-        )
-    bin_dir = tmp_path / "bin"
-    bin_dir.mkdir()
-    fake_rsync = bin_dir / "rsync"
-    fake_rsync.write_text(
-        "#!/usr/bin/env bash\n"
-        'printf "%s\\n" "$@" > "$RSYNC_ARGS_FILE"\n'
-        'if (( RSYNC_EXIT_CODE != 0 )); then exit "$RSYNC_EXIT_CODE"; fi\n'
-        'cp "$FIXTURE_CSV" "${@: -1}/capped_method_results.csv"\n'
-    )
-    fake_rsync.chmod(0o755)
-    args_file = tmp_path / "rsync_args.txt"
-    env = {
-        **runner_env,
-        "PATH": str(bin_dir) + os.pathsep + runner_env["PATH"],
-        "RSYNC_ARGS_FILE": str(args_file),
-        "RSYNC_EXIT_CODE": str(rsync_exit),
-        "FIXTURE_CSV": str(source_csv),
-    }
-    result = subprocess.run(
-        ["bash", str(script), "root@example.invalid"],
-        cwd=tmp_path,
-        env=env,
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
-    assert result.returncode == rsync_exit, result.stdout + result.stderr
-    arguments = args_file.read_text().splitlines()
-    assert arguments[-2] == (
-        "root@example.invalid:/root/cumg/experiments/results/remote/qptas_scalability/sampled_1000_v1/"
-    )
-    assert arguments[-1] == str(destination) + "/"
-    assert "--delete" not in arguments
-    assert "--exclude=*.partial.csv" in arguments
-    assert "--exclude=*.lock/" in arguments
-    assert notes.read_text() == "keep this"
-    if rsync_exit:
-        assert "Success rate" not in result.stdout
+    assert {row["status"] for row in rows} == ({"completed"} if gamma > 0 else {"error"})
+    files = {str(p): p.read_bytes() for p in directory.rglob("*.csv")}
+    repeated = execute_campaign(path)
+    assert repeated.returncode == 0, repeated.stderr
+    assert "No pending work" in repeated.stdout
+    assert files == {str(p): p.read_bytes() for p in directory.rglob("*.csv")}
+    if gamma > 0:
+        profiles = list(directory.glob("method_shards/*/profiles/*.json"))
+        assert len(profiles) == 8
+        for profile in profiles:
+            record = json.loads(profile.read_text())
+            assert record["schema_version"] == 2
+            assert record["inputs"]["A"]["shape"] == [2, 2, 2]
+            assert record["environment"]["packages"]["numpy"]
+            if record["method"].startswith("stochastic_"):
+                assert len(record["x"]) == 2
+                assert record["history"]
+            else:
+                assert record["configuration"]["step_size"] is None
     else:
-        assert "MSD 1 / 3 33.3%" in " ".join(result.stdout.split())
-        assert "CVAR 1 / 3 33.3%" in " ".join(result.stdout.split())
-        assert "TOTAL 2 / 6 33.3%" in " ".join(result.stdout.split())
-        assert "completed=4, error=1, timeout=1" in result.stdout
+        retry = execute_campaign(path, "run", "--retry-errors")
+        assert retry.returncode == 0, retry.stderr
+        assert len(list((directory / "logs").glob("*_status_before_attempt001.json"))) == 8
+
+
+def test_configuration_changes_cannot_reuse_results(tmp_path):
+    path, data = campaign_preset(tmp_path, tiny=True)
+    directory = Path(data["result_dir"])
+    directory.mkdir()
+    config = directory / "run_config.env"
+    config.write_text("\n".join(f"{key}={value}" for key, value in data["historical_env"].items()) + "\n")
+    original = config.read_bytes()
+    data["historical_env"]["STOCHASTIC_CVAR_STEP_SIZE"] = "1"
+    path.write_text(json.dumps(data))
+    result = execute_campaign(path)
+    assert result.returncode != 0
+    assert "Configuration differs" in result.stderr
+    assert config.read_bytes() == original
+
+
+def test_tuning_preview_never_launches_or_writes(tmp_path):
+    data = {
+        "campaign": "test/fresh",
+        "engine": "tuning",
+        "result_dir": str(tmp_path / "results"),
+        "phases": {"pilot": {"arguments": [], "outputs": [str(tmp_path / "results/summary.csv")]}},
+    }
+    path = tmp_path / "preset.json"
+    path.write_text(json.dumps(data))
+    result = execute_campaign(path, "run", "--phase", "pilot", "--preview")
+    assert result.returncode == 0, result.stderr
+    assert not Path(data["result_dir"]).exists()
+    assert json.loads(result.stdout)["command"][-1] == "--save-profiles"
+
+
+@pytest.mark.parametrize("status", [0, 23])
+def test_sync_propagates_transfer_status_and_uses_campaign_paths(monkeypatch, status):
+    from experiments import __main__ as cli
+
+    captured = []
+
+    def transfer(command, **kwargs):
+        captured.append((command, kwargs))
+        if status:
+            raise subprocess.CalledProcessError(status, command)
+
+    monkeypatch.setattr(subprocess, "run", transfer)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "experiments",
+            "sync",
+            "--campaign",
+            "population_qptas_fo/beta_uniform_v2",
+            "--remote",
+            "user@example",
+            "--preview",
+        ],
+    )
+    if status:
+        with pytest.raises(subprocess.CalledProcessError):
+            cli.main()
+    else:
+        cli.main()
+    command, kwargs = captured[0]
+    assert "--dry-run" in command and "--delete" not in command and kwargs["check"]
+    assert command[-2].endswith("/population_qptas_fo/beta_uniform_v2/")
+    assert command[-1].endswith("/population_qptas_fo/beta_uniform_v2/")
+
+
+def test_sync_accepts_new_campaign_config(tmp_path, monkeypatch):
+    from experiments import __main__ as cli
+
+    path, data = campaign_preset(tmp_path)
+    commands = []
+    monkeypatch.setattr(subprocess, "run", lambda command, **kwargs: commands.append(command))
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        campaign_command(path, "sync", "--remote", "user@example", "--remote-path", "/srv/new-run", "--preview")[2:],
+    )
+    cli.main()
+    assert commands[0][-2] == "user@example:/srv/new-run/"
+    assert commands[0][-1] == data["result_dir"] + "/"
+    assert not Path(data["result_dir"]).exists()
