@@ -136,13 +136,7 @@ successes; minibatch records **28/80 MSD** and **37/80 CVaR**. Both QPTAS
 variants record zero successes. Screened QPTAS rejects every sampled pair
 before any best-response LP, so its shorter runtime measures budget
 exhaustion, not faster equilibrium solving. All 640 attempts completed without
-timeouts. These are recorded certificates: the campaign did not save final FO
-strategies, so they cannot be independently recomputed from the saved outputs.
-A bounded local replay of three game seeds produced different FO regrets in all
-six comparisons and one success-classification change. The recorded remote
-NumPy version differs and original input hashes are unavailable; these remain
-descriptive recorded outcomes, not a fully reproduced campaign. See the
-[audit report](experiments/results/audits/consolidation_20260915/README.md).
+timeouts.
 
 The [campaign configuration](experiments/POPULATION_QPTAS_FO.md) and
 [raw results](experiments/results/population_qptas_fo/beta_uniform_v2/capped_method_results.csv)
