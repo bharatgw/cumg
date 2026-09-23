@@ -1,6 +1,7 @@
 import csv
 import json
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -349,6 +350,8 @@ def test_sync_propagates_transfer_status_and_uses_campaign_paths(monkeypatch, st
     captured = []
 
     def transfer(command, **kwargs):
+        if command == ["rsync", "--help"]:
+            return subprocess.CompletedProcess(command, 0, stdout="--protect-args", stderr="")
         captured.append((command, kwargs))
         if status:
             raise subprocess.CalledProcessError(status, command)
@@ -378,18 +381,35 @@ def test_sync_propagates_transfer_status_and_uses_campaign_paths(monkeypatch, st
     assert command[-1].endswith("/population_qptas_fo/beta_uniform_v2/")
 
 
-def test_sync_accepts_new_campaign_config(tmp_path, monkeypatch):
+@pytest.mark.parametrize("help_text", ["--protect-args", "--secluded-args", "openrsync usage"])
+@pytest.mark.parametrize("remote_path", ["/srv/new-run", "/srv/run with spaces/it's literal;$(echo nope)"])
+def test_sync_accepts_new_campaign_config(tmp_path, monkeypatch, help_text, remote_path):
     from experiments import __main__ as cli
 
     path, data = campaign_preset(tmp_path)
     commands = []
-    monkeypatch.setattr(subprocess, "run", lambda command, **kwargs: commands.append(command))
+
+    def transfer(command, **kwargs):
+        if command == ["rsync", "--help"]:
+            return subprocess.CompletedProcess(command, 0, stdout=help_text, stderr="")
+        commands.append(command)
+
+    monkeypatch.setattr(subprocess, "run", transfer)
     monkeypatch.setattr(
         sys,
         "argv",
-        campaign_command(path, "sync", "--remote", "user@example", "--remote-path", "/srv/new-run", "--preview")[2:],
+        campaign_command(path, "sync", "--remote", "user@example", "--remote-path", remote_path, "--preview")[2:],
     )
     cli.main()
-    assert commands[0][-2] == "user@example:/srv/new-run/"
+    command = commands[0]
+    remote_source = command[-2].removeprefix("user@example:")
+    if help_text.startswith("--"):
+        assert help_text in command
+        assert remote_source == remote_path + "/"
+    else:
+        assert "--protect-args" not in command and "--secluded-args" not in command
+        assert shlex.split(remote_source) == [remote_path + "/"]
+    assert {"--dry-run", "--exclude=*.lock/", "--exclude=*.partial*", "--exclude=*.tmp"} <= set(command)
+    assert "--delete" not in command
     assert commands[0][-1] == data["result_dir"] + "/"
     assert not Path(data["result_dir"]).exists()

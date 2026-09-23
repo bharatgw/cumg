@@ -87,7 +87,9 @@ python -m experiments sync --campaign population_qptas_fo/beta_uniform_v2 \
 ```
 
 Transfers exclude locks and partial files and never delete local files. A
-transfer failure propagates a nonzero exit status. Sync operates on any catalog
+transfer failure propagates a nonzero exit status. Sync detects the installed
+rsync's argument-protection support and quotes remote paths for older rsync
+versions, including macOS OpenRSYNC. Sync operates on any catalog
 study/run, including historical campaigns without a runnable preset. For a new
 campaign not yet in the catalog, pass its `--config` to `sync` as well.
 

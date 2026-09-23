@@ -1,0 +1,4626 @@
+{
+  "schema_version": 2,
+  "created_at": "2026-09-22T15:19:11.321835+00:00",
+  "method": "stochastic_full_batch",
+  "task": {
+    "risk": "cvar",
+    "K": 10,
+    "n": 5,
+    "seed": 1100633
+  },
+  "configuration": {
+    "risk": [
+      "cvar"
+    ],
+    "K": [
+      10
+    ],
+    "n": [
+      5
+    ],
+    "reps": 20,
+    "rep_start": 10,
+    "rep_stop": 11,
+    "seed_base": 123,
+    "gamma": 0.5,
+    "alpha": 0.5,
+    "epsilon": 0.01,
+    "stochastic_regret_tolerance": 0.01,
+    "epsilon_scr": null,
+    "stochastic_n_random_starts": 4,
+    "max_candidates": 1000,
+    "n_screen_starts": 3,
+    "n_support_starts": 20,
+    "screen_maxiter": 1000,
+    "support_maxiter": 1000,
+    "max_iter": 2000,
+    "batch_size": null,
+    "entropy_kappa": 0.01,
+    "smoothing_tau": 0.002,
+    "step_size": 500.0,
+    "step_decay": 0.5,
+    "logit_bound": 20.0,
+    "gradient_clip_norm": null,
+    "record_every": 0,
+    "certify_every": 100,
+    "stagnation_window": 500,
+    "stagnation_rtol": 0.005,
+    "stagnation_atol": 1e-05,
+    "jit_updates": true,
+    "methods": [
+      "stochastic_full_batch"
+    ],
+    "solver": "pathampl",
+    "fallback_solver": null,
+    "low": 0.0,
+    "high": 1.0,
+    "payoff_model": "uniform",
+    "csv": "/root/cumg/experiments/results/uniform_qptas_fo/calibrated_v1/method_shards/stochastic_full_batch/cvar_K10_n5_rep010__stochastic_full_batch.partial.csv",
+    "save_profiles": true,
+    "quiet": true,
+    "fail_on_error": true,
+    "path_options": {
+      "major_iteration_limit": 50000000,
+      "minor_iteration_limit": 50000000,
+      "cumulative_iteration_limit": 100000000,
+      "time_limit": 300,
+      "nms_memory_size": 50,
+      "restart_limit": 100,
+      "convergence_tolerance": 1e-08
+    }
+  },
+  "inputs": {
+    "A": {
+      "dtype": "<f8",
+      "shape": [
+        10,
+        5,
+        5
+      ],
+      "order": "C",
+      "sha256": "22565cc912ef88cdd13e6e31ce28cafee002324c05dfdb4b480a96a90329a71b"
+    },
+    "B": {
+      "dtype": "<f8",
+      "shape": [
+        10,
+        5,
+        5
+      ],
+      "order": "C",
+      "sha256": "8f40a81f798b9aa6737d5ef6ee3d3c574146f8b52ea61b512ca60f02def09a66"
+    },
+    "p": {
+      "dtype": "<f8",
+      "shape": [
+        10
+      ],
+      "order": "C",
+      "sha256": "33044bf91323ccc252ce42ab2ce584ce261c24bbf94dff0cc97fd9cd50c44f64"
+    }
+  },
+  "environment": {
+    "python": "3.12.3 (main, Aug 31 2026, 10:18:26) [GCC 13.3.0]",
+    "packages": {
+      "numpy": "2.5.3",
+      "scipy": "1.18.1",
+      "jax": "0.11.2",
+      "jaxlib": "0.11.2"
+    },
+    "platform": "Linux-6.8.0-138-generic-x86_64-with-glibc2.39",
+    "cpu": "x86_64",
+    "logical_cpus": 8,
+    "git": {
+      "commit": "088ce5165836ca6b50f92e2cc12a7f3a2bb222d6",
+      "dirty": true
+    },
+    "threads": {
+      "OMP_NUM_THREADS": "1",
+      "OPENBLAS_NUM_THREADS": "1",
+      "MKL_NUM_THREADS": "1",
+      "VECLIB_MAXIMUM_THREADS": "1",
+      "XLA_FLAGS": "--xla_cpu_multi_thread_eigen=false intra_op_parallelism_threads=1"
+    },
+    "source_sha256": {
+      "src/cumg/__init__.py": "31744df6878a30183689cb5776ca4f4fac78d0efc42566eb8ce33e6245f62a6b",
+      "src/cumg/cvar.py": "df2d9b9c554f14b2f322c6ad4fac7e5b2f966227e4b0a84278c92ae87bd0492d",
+      "src/cumg/mcp.py": "bf6cda9a75397040d8d3c54f237b29121f44fa9b7f6121a36de9dbfa3287807f",
+      "src/cumg/msd.py": "04bec2b0f5876ced95844c2e8bfb6f33e56f42d7c4d77ebee91af1b9973e2294",
+      "src/cumg/mystic_seed.py": "d9ff17fad40bf778f5956502aa72168c41fb4a58c53eea7c7fb6c5ebdb1efdb8",
+      "src/cumg/qptas.py": "8652e90a786445d4ed3f64f3d3f9522ed22619a4b51c29fe77ac2ae032fc1efa",
+      "src/cumg/results.py": "8c21174ba21c004cb4fd030590b105a269e93b85b54e2e53c02fb28382078de5",
+      "src/cumg/small_support.py": "a19ee7f3b9a44ec583ff2de66f28677c8d2667b4e8f69f29146d366dfc185f33",
+      "src/cumg/stochastic_fo.py": "306f861a7c131744769caf33ddf3bdd1053801297cefc42d6b49aecca95db651",
+      "src/cumg/validation.py": "58d1bc2ea5e502b8a8c29a70f5fdeb4d7fc0b57e1a63991dd89a85e854fdc638",
+      "experiments/common/__init__.py": "e2ed136860f4c1c7439d90a86b3f6edda3211ffb7935ef25c41c72160ae66018",
+      "experiments/common/campaign.py": "7dd35a3a3fbb8ed5f15efc87ee55ddc37720f7f72c4a42a407a4d0ca1efc6f6b",
+      "experiments/common/experiment.py": "ba2fd881d97db8ba0e0886dcd630d48959978750357a79f3359ae8f633b5e179",
+      "experiments/common/paths.py": "4ee16c7c04b1dbc49167245b9114a7d06010eeab69a557bd95c6f9c8d235473c",
+      "experiments/common/provenance.py": "ccc0a27e949111d3544f8b984d14fef848fb41739828fafa5694fe9348903a41",
+      "experiments/runners/__init__.py": "c14f1424feccc5aefc0873e37d6c5965a9fd95f80a33bd3cdbb4a345dcf255be",
+      "experiments/runners/benchmark_qptas_runtime.py": "b1f03f1cd749d710df0bd52de6e2be711c87d83ac898d6f0221cb492f1781e06",
+      "experiments/runners/capped_scalability_resume.py": "e613ad50a19d842a09a0c7c7d405d61decaa249f8af3796beccd072cb2757dea",
+      "experiments/runners/compare_scalability_approaches.py": "28c394d3c10f2a263c5f62d8d83b296173ea333ab84d2b0432681568ac4e9c27",
+      "experiments/runners/compare_small_support_msd.py": "59985f3ef506177ea6539bae2c8facdf330f2fc5af4e5fdd2548fe52305cb277",
+      "experiments/runners/compare_stochastic_fo.py": "83c85318f115c83d99c91ce919164ed58168ccd48f75ce328f4d6acbb8401bff",
+      "experiments/runners/tuning_campaign.py": "d51821318bd4f765821f67bb3f0fa38ff013fc965ee3192160be589aed9490b0",
+      "experiments/runners/uniform_profile_baseline.py": "554ead006b558b74d2b44e6f6efc6308ed5aa88660d8905aa60459e48a746b3a"
+    }
+  },
+  "x": [
+    6.759777352006958e-09,
+    0.5013156713067941,
+    5.757299270954432e-06,
+    0.2597218257895059,
+    0.23895673884465166
+  ],
+  "y": [
+    2.921625647272473e-05,
+    0.3743928118893623,
+    0.00397518732546757,
+    0.6216012725848796,
+    1.5119438178253187e-06
+  ],
+  "theta": [
+    1.0818848907476661,
+    1.9189732802069284
+  ],
+  "certificate": {
+    "eta": 0.013226102927285988,
+    "regret1": 0.004610597981302589,
+    "regret2": 0.013226102927285988,
+    "rho1": 0.45538884619287356,
+    "rho2": 0.4618660206590949,
+    "best_dev1": {
+      "value": 0.45999944417417615,
+      "strategy": [
+        0.0,
+        0.3338516739348124,
+        0.009981641378494251,
+        0.4040300339728485,
+        0.25213665071384483
+      ],
+      "success": true,
+      "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+    },
+    "best_dev2": {
+      "value": 0.47509212358638087,
+      "strategy": [
+        0.0,
+        0.3560422602338329,
+        0.3400189345894606,
+        0.3039388051767065,
+        0.0
+      ],
+      "success": true,
+      "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+    }
+  },
+  "selected_start": 4,
+  "selected_checkpoint": {
+    "iteration": 7100,
+    "residual_norm": 0.7076551638478968,
+    "objective": 0.2503879154602969,
+    "x": [
+      6.759777352006958e-09,
+      0.5013156713067941,
+      5.757299270954432e-06,
+      0.2597218257895059,
+      0.23895673884465166
+    ],
+    "y": [
+      2.921625647272473e-05,
+      0.3743928118893623,
+      0.00397518732546757,
+      0.6216012725848796,
+      1.5119438178253187e-06
+    ],
+    "certificate": {
+      "eta": 0.013226102927285988,
+      "regret1": 0.004610597981302589,
+      "regret2": 0.013226102927285988,
+      "rho1": 0.45538884619287356,
+      "rho2": 0.4618660206590949,
+      "best_dev1": {
+        "value": 0.45999944417417615,
+        "strategy": [
+          0.0,
+          0.3338516739348124,
+          0.009981641378494251,
+          0.4040300339728485,
+          0.25213665071384483
+        ],
+        "success": true,
+        "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+      },
+      "best_dev2": {
+        "value": 0.47509212358638087,
+        "strategy": [
+          0.0,
+          0.3560422602338329,
+          0.3400189345894606,
+          0.3039388051767065,
+          0.0
+        ],
+        "success": true,
+        "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+      }
+    },
+    "eta": 0.013226102927285988,
+    "theta": [
+      1.0818848907476661,
+      1.9189732802069284
+    ],
+    "start_index": 4,
+    "start_iteration": 2000
+  },
+  "history": [
+    {
+      "iteration": 0,
+      "residual_norm": 0.13086347224135986,
+      "objective": 0.008562624183532581,
+      "x": [
+        0.2,
+        0.2,
+        0.2,
+        0.2,
+        0.2
+      ],
+      "y": [
+        0.2,
+        0.2,
+        0.2,
+        0.2,
+        0.2
+      ],
+      "certificate": {
+        "eta": 0.03733487605331942,
+        "regret1": 0.03733487605331942,
+        "regret2": 0.00937726597791455,
+        "rho1": 0.4756191357434011,
+        "rho2": 0.46625709193381315,
+        "best_dev1": {
+          "value": 0.5129540117967205,
+          "strategy": [
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.4756343579117277,
+          "strategy": [
+            0.0,
+            0.29383805891084114,
+            0.20734514783838476,
+            0.25035436918122367,
+            0.2484624240695504
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.03733487605331942,
+      "theta": [
+        0.4872617235775024,
+        0.4859190939419361
+      ],
+      "start_index": 0,
+      "start_iteration": 0
+    },
+    {
+      "iteration": 100,
+      "residual_norm": 0.7135414879918015,
+      "objective": 0.2545707275427771,
+      "x": [
+        0.4508690724040718,
+        0.07807883321426477,
+        0.15984346555128473,
+        0.2868827435269636,
+        0.02432588530341505
+      ],
+      "y": [
+        0.34380892534449253,
+        0.6447183899447376,
+        8.566949183499089e-05,
+        7.974519577988234e-07,
+        0.011386217766977094
+      ],
+      "certificate": {
+        "eta": 0.06310850776687049,
+        "regret1": 0.06310850776687049,
+        "regret2": 0.01163781445811729,
+        "rho1": 0.4176551558773983,
+        "rho2": 0.5019683300584412,
+        "best_dev1": {
+          "value": 0.4807636636442688,
+          "strategy": [
+            0.0,
+            0.0,
+            0.6635259089773927,
+            0.3364740910226073,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.5136061445165585,
+          "strategy": [
+            0.0,
+            0.7032430506535845,
+            0.033576768580472316,
+            0.0,
+            0.2631801807659432
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.06310850776687049,
+      "theta": [
+        -491.9082218441074,
+        132.34728365380815
+      ],
+      "start_index": 0,
+      "start_iteration": 100
+    },
+    {
+      "iteration": 200,
+      "residual_norm": 0.7123591567826543,
+      "objective": 0.25372778412604713,
+      "x": [
+        0.4269258063377922,
+        0.060483144459962584,
+        0.19880762982098577,
+        0.2903234963452819,
+        0.02345992303597755
+      ],
+      "y": [
+        0.33792438560799537,
+        0.6472189092151572,
+        0.0005494586580169174,
+        3.7087748455591846e-06,
+        0.014303537743984754
+      ],
+      "certificate": {
+        "eta": 0.05926434404914899,
+        "regret1": 0.05926434404914899,
+        "regret2": 0.016032913257175485,
+        "rho1": 0.42072436975918137,
+        "rho2": 0.49644705969317426,
+        "best_dev1": {
+          "value": 0.47998871380833036,
+          "strategy": [
+            0.0,
+            0.0,
+            0.6572578521672962,
+            0.34274214783270385,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.5124799729503497,
+          "strategy": [
+            0.0,
+            0.6768749678635868,
+            0.037218305117083794,
+            0.0,
+            0.28590672701932945
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.05926434404914899,
+      "theta": [
+        -491.9082218441074,
+        132.34728365380815
+      ],
+      "start_index": 0,
+      "start_iteration": 200
+    },
+    {
+      "iteration": 300,
+      "residual_norm": 0.711737204150702,
+      "objective": 0.253284923886129,
+      "x": [
+        0.4075197603010918,
+        0.06541764731665138,
+        0.2179212409313292,
+        0.2850474142321361,
+        0.024093937218791578
+      ],
+      "y": [
+        0.341857421173403,
+        0.6359905965295491,
+        0.0019156204957066546,
+        1.0602924311326723e-05,
+        0.020225758877029792
+      ],
+      "certificate": {
+        "eta": 0.056127801116000575,
+        "regret1": 0.056127801116000575,
+        "regret2": 0.017916612708184676,
+        "rho1": 0.4252385621778668,
+        "rho2": 0.49274644158303793,
+        "best_dev1": {
+          "value": 0.4813663632938674,
+          "strategy": [
+            0.0,
+            0.0,
+            0.6542696623261578,
+            0.3457303376738422,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.5106630542912226,
+          "strategy": [
+            0.0,
+            0.6782171050874578,
+            0.03686144370488831,
+            0.0,
+            0.28492145120765394
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.056127801116000575,
+      "theta": [
+        -491.9082218441074,
+        132.34728365380815
+      ],
+      "start_index": 0,
+      "start_iteration": 300
+    },
+    {
+      "iteration": 400,
+      "residual_norm": 0.7112850683258751,
+      "objective": 0.25296322421167244,
+      "x": [
+        0.3915861882715457,
+        0.07144512526467883,
+        0.23324955899685504,
+        0.27920023504249675,
+        0.024518892424423462
+      ],
+      "y": [
+        0.34383563082644075,
+        0.6219981875125172,
+        0.0051570779085079255,
+        2.3864768058098093e-05,
+        0.028985238984475786
+      ],
+      "certificate": {
+        "eta": 0.05305226655863515,
+        "regret1": 0.05305226655863515,
+        "regret2": 0.019154495069103272,
+        "rho1": 0.4294094659767508,
+        "rho2": 0.4898873943600409,
+        "best_dev1": {
+          "value": 0.48246173253538593,
+          "strategy": [
+            0.0,
+            0.0,
+            0.6505394492928015,
+            0.3494605507071985,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.5090418894291442,
+          "strategy": [
+            0.0,
+            0.6865459476661473,
+            0.06400557175074396,
+            0.0,
+            0.2494484805831088
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.05305226655863515,
+      "theta": [
+        -491.9082218441074,
+        132.34728365380815
+      ],
+      "start_index": 0,
+      "start_iteration": 400
+    },
+    {
+      "iteration": 500,
+      "residual_norm": 0.7108953170744008,
+      "objective": 0.2526860759191564,
+      "x": [
+        0.3778725090240947,
+        0.0779127311379455,
+        0.24704510060561388,
+        0.27221753163410534,
+        0.02495212759824057
+      ],
+      "y": [
+        0.3429656394669911,
+        0.6028930487384566,
+        0.012319850641815316,
+        4.679118299419963e-05,
+        0.04177466996974278
+      ],
+      "certificate": {
+        "eta": 0.049459523906907665,
+        "regret1": 0.049459523906907665,
+        "regret2": 0.02004148016716023,
+        "rho1": 0.4334785099770849,
+        "rho2": 0.48756494564056463,
+        "best_dev1": {
+          "value": 0.4829380338839926,
+          "strategy": [
+            0.0,
+            0.0,
+            0.6485072396911378,
+            0.35149276030886223,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.5076064258077249,
+          "strategy": [
+            0.0,
+            0.6547714994764418,
+            0.06734743999323035,
+            0.0,
+            0.27788106053032785
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.049459523906907665,
+      "theta": [
+        -491.9082218441074,
+        132.34728365380815
+      ],
+      "start_index": 0,
+      "start_iteration": 500
+    },
+    {
+      "iteration": 500,
+      "residual_norm": 0.21821969559549342,
+      "objective": 0.023809917772894908,
+      "x": [
+        0.2220488311014077,
+        0.017265135924861907,
+        0.22289508161680058,
+        0.402815516737602,
+        0.13497543461932793
+      ],
+      "y": [
+        0.06828325850321662,
+        0.3753961833416645,
+        0.16430300329517497,
+        0.10086394442354417,
+        0.29115361043639976
+      ],
+      "certificate": {
+        "eta": 0.061205176959644114,
+        "regret1": 0.061205176959644114,
+        "regret2": 0.016689114173199626,
+        "rho1": 0.43412367875596236,
+        "rho2": 0.479273150599211,
+        "best_dev1": {
+          "value": 0.4953288557156065,
+          "strategy": [
+            0.0,
+            0.83428049047218,
+            0.16571950952782008,
+            0.0,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.4959622647724106,
+          "strategy": [
+            0.0,
+            0.8540154885218917,
+            0.0,
+            0.0,
+            0.1459845114781083
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.061205176959644114,
+      "theta": [
+        0.4703871198414638,
+        0.49922534824222414
+      ],
+      "start_index": 1,
+      "start_iteration": 0
+    },
+    {
+      "iteration": 600,
+      "residual_norm": 0.7083502476287975,
+      "objective": 0.2508800366578894,
+      "x": [
+        0.3025525123497943,
+        0.30843841824914153,
+        0.10436845438810465,
+        0.007375078509413966,
+        0.27726553650354563
+      ],
+      "y": [
+        0.0009319394789740886,
+        0.545796268639657,
+        0.44376363500942323,
+        0.009002436553579903,
+        0.0005057203183658461
+      ],
+      "certificate": {
+        "eta": 0.03740895980297465,
+        "regret1": 0.03740895980297465,
+        "regret2": 0.0038494478373878316,
+        "rho1": 0.42546872403661284,
+        "rho2": 0.4651876600485314,
+        "best_dev1": {
+          "value": 0.4628776838395875,
+          "strategy": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.46903710788591924,
+          "strategy": [
+            0.0,
+            0.3703270688662349,
+            0.5744322637223035,
+            0.0,
+            0.055240667411461594
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.03740895980297465,
+      "theta": [
+        -22.85023521806349,
+        210.70393876217656
+      ],
+      "start_index": 1,
+      "start_iteration": 100
+    },
+    {
+      "iteration": 700,
+      "residual_norm": 0.7082733781253668,
+      "objective": 0.2508255890805594,
+      "x": [
+        0.2931277071695033,
+        0.3301472928849707,
+        0.0930258832662117,
+        0.009145495575765166,
+        0.27455362110354914
+      ],
+      "y": [
+        0.0006187555463609745,
+        0.5549168083757247,
+        0.4359779406459237,
+        0.008136393869046568,
+        0.0003501015629440175
+      ],
+      "certificate": {
+        "eta": 0.0366341154098313,
+        "regret1": 0.0366341154098313,
+        "regret2": 0.0038051833091804488,
+        "rho1": 0.4256119316532745,
+        "rho2": 0.4657987634842057,
+        "best_dev1": {
+          "value": 0.4622460470631058,
+          "strategy": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.46960394679338613,
+          "strategy": [
+            0.0,
+            0.3744405567416329,
+            0.5640367019703614,
+            0.0,
+            0.06152274128800575
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.0366341154098313,
+      "theta": [
+        -22.85023521806349,
+        210.70393876217656
+      ],
+      "start_index": 1,
+      "start_iteration": 200
+    },
+    {
+      "iteration": 800,
+      "residual_norm": 0.7082409026203449,
+      "objective": 0.25080258807224043,
+      "x": [
+        0.2869771366648935,
+        0.3427201913839603,
+        0.08668056985030685,
+        0.010296090813753453,
+        0.273326011287086
+      ],
+      "y": [
+        0.0005147352369679586,
+        0.5596048710315654,
+        0.4315808907330796,
+        0.008023424950574856,
+        0.0002760780478121819
+      ],
+      "certificate": {
+        "eta": 0.036112003576095064,
+        "regret1": 0.036112003576095064,
+        "regret2": 0.0037771478268138203,
+        "rho1": 0.4257962435256723,
+        "rho2": 0.46607419021712576,
+        "best_dev1": {
+          "value": 0.46190824710176737,
+          "strategy": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.4698513380439396,
+          "strategy": [
+            0.0,
+            0.3765784103489458,
+            0.5574493733209334,
+            0.0,
+            0.0659722163301208
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.036112003576095064,
+      "theta": [
+        -22.85023521806349,
+        210.70393876217656
+      ],
+      "start_index": 1,
+      "start_iteration": 300
+    },
+    {
+      "iteration": 900,
+      "residual_norm": 0.7082206771916195,
+      "objective": 0.2507882638008781,
+      "x": [
+        0.28206307009030807,
+        0.35222805446558864,
+        0.08186666582154575,
+        0.011096597225785194,
+        0.27274561239677225
+      ],
+      "y": [
+        0.000464238161822738,
+        0.5623691399905467,
+        0.4288093359213291,
+        0.008126670097134681,
+        0.00023061582916667826
+      ],
+      "certificate": {
+        "eta": 0.03562646297222233,
+        "regret1": 0.03562646297222233,
+        "regret2": 0.0037408703579318026,
+        "rho1": 0.4260771269644266,
+        "rho2": 0.46622521529012734,
+        "best_dev1": {
+          "value": 0.46170358993664895,
+          "strategy": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.46996608564805914,
+          "strategy": [
+            0.0,
+            0.37810689528405517,
+            0.55196492231305,
+            0.0,
+            0.0699281824028948
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.03562646297222233,
+      "theta": [
+        -22.85023521806349,
+        210.70393876217656
+      ],
+      "start_index": 1,
+      "start_iteration": 400
+    },
+    {
+      "iteration": 1000,
+      "residual_norm": 0.7082056355377472,
+      "objective": 0.2507776111037122,
+      "x": [
+        0.27788775027098284,
+        0.3600743499060033,
+        0.07789271383737711,
+        0.011668945448981463,
+        0.27247624053665526
+      ],
+      "y": [
+        0.0004346618754067125,
+        0.5640697033003306,
+        0.4269834384408791,
+        0.008313328387138849,
+        0.0001988679962447667
+      ],
+      "certificate": {
+        "eta": 0.03516373668155365,
+        "regret1": 0.03516373668155365,
+        "regret2": 0.003698427834349205,
+        "rho1": 0.4264104162057791,
+        "rho2": 0.46631863019579833,
+        "best_dev1": {
+          "value": 0.4615741528873327,
+          "strategy": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.47001705803014754,
+          "strategy": [
+            0.0,
+            0.3793192969812733,
+            0.5472149608926885,
+            0.0,
+            0.07346574212603817
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.03516373668155365,
+      "theta": [
+        -22.85023521806349,
+        210.70393876217656
+      ],
+      "start_index": 1,
+      "start_iteration": 500
+    },
+    {
+      "iteration": 1100,
+      "residual_norm": 0.708193359004396,
+      "objective": 0.25076891686896463,
+      "x": [
+        0.27421329595702715,
+        0.366876766889245,
+        0.07445131810652104,
+        0.01208035770387862,
+        0.2723782613433283
+      ],
+      "y": [
+        0.00041517779007185595,
+        0.5650966707870696,
+        0.4257771647746576,
+        0.008535997580704432,
+        0.00017498906749655976
+      ],
+      "certificate": {
+        "eta": 0.034717456070209984,
+        "regret1": 0.034717456070209984,
+        "regret2": 0.0036513423207853446,
+        "rho1": 0.4267755800174846,
+        "rho2": 0.4663814723985651,
+        "best_dev1": {
+          "value": 0.4614930360876946,
+          "strategy": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.47003281471935043,
+          "strategy": [
+            0.0,
+            0.3803401442935652,
+            0.5430005064142762,
+            0.0,
+            0.07665934929215855
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.034717456070209984,
+      "theta": [
+        -22.85023521806349,
+        210.70393876217656
+      ],
+      "start_index": 1,
+      "start_iteration": 600
+    },
+    {
+      "iteration": 1200,
+      "residual_norm": 0.7081827853529172,
+      "objective": 0.25076142873510804,
+      "x": [
+        0.2709048423825295,
+        0.37296053865317763,
+        0.07137877861157245,
+        0.012372506523346578,
+        0.27238333382937374
+      ],
+      "y": [
+        0.00040122294748646495,
+        0.5656595533024075,
+        0.42500887715202185,
+        0.008774198422063433,
+        0.00015614817602067405
+      ],
+      "certificate": {
+        "eta": 0.03428385851310378,
+        "regret1": 0.03428385851310378,
+        "regret2": 0.003600611602835313,
+        "rho1": 0.427161709525615,
+        "rho2": 0.46642668593050807,
+        "best_dev1": {
+          "value": 0.4614455680387188,
+          "strategy": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.4700272975333434,
+          "strategy": [
+            0.0,
+            0.38123279748755645,
+            0.5391973758608979,
+            0.0,
+            0.07956982665154567
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.03428385851310378,
+      "theta": [
+        -22.85023521806349,
+        210.70393876217656
+      ],
+      "start_index": 1,
+      "start_iteration": 700
+    },
+    {
+      "iteration": 1300,
+      "residual_norm": 0.7081733639516582,
+      "objective": 0.2507547567053039,
+      "x": [
+        0.26787749807841815,
+        0.37851707698386666,
+        0.06857826385772431,
+        0.012573199961169134,
+        0.2724539611188216
+      ],
+      "y": [
+        0.000390572231516387,
+        0.5658833643063939,
+        0.42456722669726576,
+        0.009018055743187713,
+        0.00014078102163642654
+      ],
+      "certificate": {
+        "eta": 0.03386047346748616,
+        "regret1": 0.03386047346748616,
+        "regret2": 0.0035469295695633174,
+        "rho1": 0.4275624212664791,
+        "rho2": 0.46646120683325504,
+        "best_dev1": {
+          "value": 0.46142289473396525,
+          "strategy": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.47000813640281836,
+          "strategy": [
+            0.0,
+            0.3820333590004421,
+            0.5357226112425437,
+            0.0,
+            0.08224402975701414
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.03386047346748616,
+      "theta": [
+        -22.85023521806349,
+        210.70393876217656
+      ],
+      "start_index": 1,
+      "start_iteration": 800
+    },
+    {
+      "iteration": 1400,
+      "residual_norm": 0.708164773938068,
+      "objective": 0.2507486735233775,
+      "x": [
+        0.26507388513715696,
+        0.383668199846592,
+        0.06598812275742584,
+        0.01270196982837507,
+        0.2725678224304502
+      ],
+      "y": [
+        0.0003820272586149273,
+        0.5658482965042859,
+        0.4243792419258364,
+        0.00926249427252897,
+        0.00012794003873373383
+      ],
+      "certificate": {
+        "eta": 0.033445555132484595,
+        "regret1": 0.033445555132484595,
+        "regret2": 0.0035214941711006476,
+        "rho1": 0.42797373051893467,
+        "rho2": 0.46648906222250736,
+        "best_dev1": {
+          "value": 0.46141928565141926,
+          "strategy": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.470010556393608,
+          "strategy": [
+            0.0,
+            0.3867549581786597,
+            0.6024754797794618,
+            0.0,
+            0.010769562041878549
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.033445555132484595,
+      "theta": [
+        -22.85023521806349,
+        210.70393876217656
+      ],
+      "start_index": 1,
+      "start_iteration": 900
+    },
+    {
+      "iteration": 1500,
+      "residual_norm": 0.7081568117238274,
+      "objective": 0.25074303499542816,
+      "x": [
+        0.26245317412508473,
+        0.38849608084162524,
+        0.06356688119238572,
+        0.012773069243697843,
+        0.27271079459720654
+      ],
+      "y": [
+        0.00037489426586229704,
+        0.565608599275332,
+        0.4243946699384597,
+        0.009504825490170057,
+        0.00011701103017592537
+      ],
+      "certificate": {
+        "eta": 0.033037802563049556,
+        "regret1": 0.033037802563049556,
+        "regret2": 0.003519117280202211,
+        "rho1": 0.4283930327472435,
+        "rho2": 0.46651273546324434,
+        "best_dev1": {
+          "value": 0.46143083531029305,
+          "strategy": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.47003185274344655,
+          "strategy": [
+            0.0,
+            0.3875437679613193,
+            0.599129643846151,
+            0.0,
+            0.013326588192529775
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.033037802563049556,
+      "theta": [
+        -22.85023521806349,
+        210.70393876217656
+      ],
+      "start_index": 1,
+      "start_iteration": 1000
+    },
+    {
+      "iteration": 1600,
+      "residual_norm": 0.708149339695771,
+      "objective": 0.2507377436557782,
+      "x": [
+        0.2599851617784707,
+        0.3930586961029049,
+        0.06128541979433207,
+        0.01279721532918812,
+        0.27287350699510415
+      ],
+      "y": [
+        0.0003687488426645554,
+        0.5652025062046496,
+        0.4245775415635838,
+        0.009743628739134657,
+        0.00010757464996738167
+      ],
+      "certificate": {
+        "eta": 0.03263620860816191,
+        "regret1": 0.03263620860816191,
+        "regret2": 0.003511496930808211,
+        "rho1": 0.4288185649293025,
+        "rho2": 0.46653383167207724,
+        "best_dev1": {
+          "value": 0.4614547735374644,
+          "strategy": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.47004532860288545,
+          "strategy": [
+            0.0,
+            0.3882825731140349,
+            0.5960552990235791,
+            0.0,
+            0.015662127862385956
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.03263620860816191,
+      "theta": [
+        -22.85023521806349,
+        210.70393876217656
+      ],
+      "start_index": 1,
+      "start_iteration": 1100
+    },
+    {
+      "iteration": 1700,
+      "residual_norm": 0.7081422602765278,
+      "objective": 0.25073273039477484,
+      "x": [
+        0.25764682050938487,
+        0.3973984268689664,
+        0.05912258604013525,
+        0.012782664897013216,
+        0.27304950168450015
+      ],
+      "y": [
+        0.0003633197355501964,
+        0.564657861949513,
+        0.42490129657530357,
+        0.009978189155240546,
+        9.933258439268275e-05
+      ],
+      "certificate": {
+        "eta": 0.03223997215187496,
+        "regret1": 0.03223997215187496,
+        "regret2": 0.0034995262100689928,
+        "rho1": 0.4292490991859559,
+        "rho2": 0.46655342817103984,
+        "best_dev1": {
+          "value": 0.46148907133783085,
+          "strategy": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.47005295438110883,
+          "strategy": [
+            0.0,
+            0.3889792391335042,
+            0.5932054216453369,
+            0.0,
+            0.01781533922115892
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.03223997215187496,
+      "theta": [
+        -22.85023521806349,
+        210.70393876217656
+      ],
+      "start_index": 1,
+      "start_iteration": 1200
+    },
+    {
+      "iteration": 1800,
+      "residual_norm": 0.7081355016848804,
+      "objective": 0.25072794437324863,
+      "x": [
+        0.2554201658009823,
+        0.4015471509903769,
+        0.05706258528879861,
+        0.012735910033875772,
+        0.27323418788596643
+      ],
+      "y": [
+        0.0003584272487175871,
+        0.5639955032645861,
+        0.4253458064214964,
+        0.010208197613910447,
+        9.206545128942238e-05
+      ],
+      "certificate": {
+        "eta": 0.03184844384545221,
+        "regret1": 0.03184844384545221,
+        "regret2": 0.003483869698179154,
+        "rho1": 0.4296837586095299,
+        "rho2": 0.4665722706274381,
+        "best_dev1": {
+          "value": 0.4615322024549821,
+          "strategy": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.47005614032561727,
+          "strategy": [
+            0.0,
+            0.38963954166540227,
+            0.5905445729041711,
+            0.0,
+            0.01981588543042664
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.03184844384545221,
+      "theta": [
+        -22.85023521806349,
+        210.70393876217656
+      ],
+      "start_index": 1,
+      "start_iteration": 1300
+    },
+    {
+      "iteration": 1900,
+      "residual_norm": 0.7081290095820486,
+      "objective": 0.25072334710582656,
+      "x": [
+        0.25329087426919733,
+        0.40552940996852693,
+        0.055093353558685734,
+        0.012662144987832474,
+        0.2734242172157575
+      ],
+      "y": [
+        0.00035394869285290215,
+        0.5632313882110312,
+        0.42589547282481394,
+        0.01043358283463356,
+        8.560743666830603e-05
+      ],
+      "certificate": {
+        "eta": 0.031461090703255645,
+        "regret1": 0.031461090703255645,
+        "regret2": 0.00346503505381468,
+        "rho1": 0.4301219016297648,
+        "rho2": 0.46659088838395546,
+        "best_dev1": {
+          "value": 0.46158299233302047,
+          "strategy": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.47005592343777014,
+          "strategy": [
+            0.0,
+            0.3902678464520274,
+            0.5880454002900118,
+            0.0,
+            0.021686753257960732
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.031461090703255645,
+      "theta": [
+        -22.85023521806349,
+        210.70393876217656
+      ],
+      "start_index": 1,
+      "start_iteration": 1400
+    },
+    {
+      "iteration": 2000,
+      "residual_norm": 0.7081227418973989,
+      "objective": 0.2507189087961451,
+      "x": [
+        0.2512473527292613,
+        0.4093644625314652,
+        0.053205500903865256,
+        0.012565589298962855,
+        0.2736170945364455
+      ],
+      "y": [
+        0.00034979809270902217,
+        0.5623779898690043,
+        0.4265379678134923,
+        0.010654413916885876,
+        7.983030790860208e-05
+      ],
+      "certificate": {
+        "eta": 0.031077471909756516,
+        "regret1": 0.031077471909756516,
+        "regret2": 0.003443418734536463,
+        "rho1": 0.4305630468345861,
+        "rho2": 0.46660966509933305,
+        "best_dev1": {
+          "value": 0.46164051874434264,
+          "strategy": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.4700530838338695,
+          "strategy": [
+            0.0,
+            0.39086753654028117,
+            0.5856863693257077,
+            0.0,
+            0.02344609413401115
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.031077471909756516,
+      "theta": [
+        -22.85023521806349,
+        210.70393876217656
+      ],
+      "start_index": 1,
+      "start_iteration": 1500
+    },
+    {
+      "iteration": 2100,
+      "residual_norm": 0.7081166654761732,
+      "objective": 0.2507146059625473,
+      "x": [
+        0.24928009040238688,
+        0.4130676642346749,
+        0.05139160112289738,
+        0.01244971724121288,
+        0.2738109269988279
+      ],
+      "y": [
+        0.00034591380374431117,
+        0.5614452386532666,
+        0.4272633724806098,
+        0.010870842115054366,
+        7.463294732494795e-05
+      ],
+      "certificate": {
+        "eta": 0.030697221603780744,
+        "regret1": 0.030697221603780744,
+        "regret2": 0.0034193363105700647,
+        "rho1": 0.4310068226919862,
+        "rho2": 0.4666288835267865,
+        "best_dev1": {
+          "value": 0.46170404429576695,
+          "strategy": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.47004821983735656,
+          "strategy": [
+            0.0,
+            0.391441290782094,
+            0.5834502398390949,
+            0.0,
+            0.025108469378811067
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.030697221603780744,
+      "theta": [
+        -22.85023521806349,
+        210.70393876217656
+      ],
+      "start_index": 1,
+      "start_iteration": 1600
+    },
+    {
+      "iteration": 2200,
+      "residual_norm": 0.708110753824339,
+      "objective": 0.2507104198408368,
+      "x": [
+        0.2473811955442088,
+        0.4166514231703042,
+        0.04964569959692737,
+        0.012317424316851077,
+        0.27400425737170875
+      ],
+      "y": [
+        0.000342250706154191,
+        0.560441177196121,
+        0.4280635725435625,
+        0.011083065279205894,
+        6.993427495644421e-05
+      ],
+      "certificate": {
+        "eta": 0.030569430588504476,
+        "regret1": 0.030569430588504476,
+        "regret2": 0.0033930432065585325,
+        "rho1": 0.4312035387415136,
+        "rho2": 0.46664875473951695,
+        "best_dev1": {
+          "value": 0.4617729693300181,
+          "strategy": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.4700417979460755,
+          "strategy": [
+            0.0,
+            0.3919912713353205,
+            0.5813230108901697,
+            0.0,
+            0.02668571777450984
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.030569430588504476,
+      "theta": [
+        -22.85023521806349,
+        210.70393876217656
+      ],
+      "start_index": 1,
+      "start_iteration": 1700
+    },
+    {
+      "iteration": 2300,
+      "residual_norm": 0.708104985542186,
+      "objective": 0.25070633527484976,
+      "x": [
+        0.2455440560129339,
+        0.42012588012272445,
+        0.04796296299185803,
+        0.012171150340016262,
+        0.2741959505324672
+      ],
+      "y": [
+        0.00033877514524038356,
+        0.5593724263107809,
+        0.42893182443397004,
+        0.011291305781823278,
+        6.566832818552094e-05
+      ],
+      "certificate": {
+        "eta": 0.030457471861777885,
+        "regret1": 0.030457471861777885,
+        "regret2": 0.003364749278885637,
+        "rho1": 0.43138932642810907,
+        "rho2": 0.46666943769051955,
+        "best_dev1": {
+          "value": 0.46184679828988695,
+          "strategy": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.4700341869694052,
+          "strategy": [
+            0.0,
+            0.39251925354209927,
+            0.5792931708064188,
+            0.0,
+            0.028187575651481868
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.030457471861777885,
+      "theta": [
+        -22.85023521806349,
+        210.70393876217656
+      ],
+      "start_index": 1,
+      "start_iteration": 1800
+    },
+    {
+      "iteration": 2400,
+      "residual_norm": 0.7080993432058322,
+      "objective": 0.2507023399242655,
+      "x": [
+        0.24376308540312053,
+        0.42349940435685607,
+        0.04633942387639505,
+        0.012012971896940656,
+        0.2743851144666877
+      ],
+      "y": [
+        0.0003354615713209334,
+        0.5582445232955029,
+        0.4298624377105587,
+        0.01149579666539307,
+        6.178075722433863e-05
+      ],
+      "certificate": {
+        "eta": 0.030341389610378577,
+        "regret1": 0.030341389610378577,
+        "regret2": 0.00333652331115758,
+        "rho1": 0.43158372560488234,
+        "rho2": 0.46669105259276494,
+        "best_dev1": {
+          "value": 0.4619251152152609,
+          "strategy": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.4700275759039225,
+          "strategy": [
+            0.0,
+            0.4045458843740207,
+            0.5954541156259793,
+            0.0,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.030341389610378577,
+      "theta": [
+        -22.85023521806349,
+        210.70393876217656
+      ],
+      "start_index": 1,
+      "start_iteration": 1900
+    },
+    {
+      "iteration": 2500,
+      "residual_norm": 0.7080938125488762,
+      "objective": 0.2506984236850015,
+      "x": [
+        0.2420335296526598,
+        0.4267789628594928,
+        0.04477179048436306,
+        0.011844672770727024,
+        0.2745710442327572
+      ],
+      "y": [
+        0.0003322902600815695,
+        0.5570621718264046,
+        0.43085053873673657,
+        0.011696772901137496,
+        5.8226275639736345e-05
+      ],
+      "certificate": {
+        "eta": 0.030221427085304342,
+        "regret1": 0.030221427085304342,
+        "regret2": 0.0033184683210976673,
+        "rho1": 0.43178613850282066,
+        "rho2": 0.466713690250564,
+        "best_dev1": {
+          "value": 0.462007565588125,
+          "strategy": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.47003215857166164,
+          "strategy": [
+            0.0,
+            0.40562367054866877,
+            0.5943763294513312,
+            0.0,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.030221427085304342,
+      "theta": [
+        -22.85023521806349,
+        210.70393876217656
+      ],
+      "start_index": 1,
+      "start_iteration": 2000
+    },
+    {
+      "iteration": 2500,
+      "residual_norm": 0.19357950866375884,
+      "objective": 0.01873651308725114,
+      "x": [
+        0.017233154979341577,
+        0.10657936824765847,
+        0.30824748381180717,
+        0.22461961271821523,
+        0.3433203802429775
+      ],
+      "y": [
+        0.5079197858572845,
+        0.09662134639970495,
+        0.12906079997817435,
+        0.2242305314172243,
+        0.04216753634761186
+      ],
+      "certificate": {
+        "eta": 0.06346539231834714,
+        "regret1": 0.030872233659607617,
+        "regret2": 0.06346539231834714,
+        "rho1": 0.46650852841296914,
+        "rho2": 0.41924880953465027,
+        "best_dev1": {
+          "value": 0.49738076207257675,
+          "strategy": [
+            0.0,
+            0.5446570373383651,
+            0.4553429626616349,
+            0.0,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.4827142018529974,
+          "strategy": [
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.06346539231834714,
+      "theta": [
+        0.49635334469849957,
+        0.4554109587023332
+      ],
+      "start_index": 2,
+      "start_iteration": 0
+    },
+    {
+      "iteration": 2600,
+      "residual_norm": 0.7102485789707585,
+      "objective": 0.2522265219649909,
+      "x": [
+        0.010531221643792202,
+        0.5801851441821401,
+        0.00029508633606822345,
+        0.2876444239628312,
+        0.12134412387516835
+      ],
+      "y": [
+        0.018041342544712666,
+        0.13757775378486445,
+        0.06107173154970769,
+        0.7829270238105839,
+        0.0003821483101313438
+      ],
+      "certificate": {
+        "eta": 0.028749881599030636,
+        "regret1": 0.0013095233319820876,
+        "regret2": 0.028749881599030636,
+        "rho1": 0.46018634375585676,
+        "rho2": 0.45489982537523127,
+        "best_dev1": {
+          "value": 0.46149586708783885,
+          "strategy": [
+            0.0,
+            0.5733805089959028,
+            0.0,
+            0.4266194910040973,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.4836497069742619,
+          "strategy": [
+            0.0,
+            0.48619136199180923,
+            0.46180354013362684,
+            0.05200509787456381,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.028749881599030636,
+      "theta": [
+        -281.2839119355433,
+        6.349834111795012
+      ],
+      "start_index": 2,
+      "start_iteration": 100
+    },
+    {
+      "iteration": 2700,
+      "residual_norm": 0.7086996333794694,
+      "objective": 0.2511275851760972,
+      "x": [
+        0.0050748841887161425,
+        0.5754658957824929,
+        0.0005092131833831306,
+        0.2605358344000169,
+        0.15841417244539113
+      ],
+      "y": [
+        0.0036520668837553257,
+        0.15116664881642744,
+        0.042647130136336704,
+        0.802478679434585,
+        5.547472889549883e-05
+      ],
+      "certificate": {
+        "eta": 0.02677490475247324,
+        "regret1": 0.0019182735272321172,
+        "regret2": 0.02677490475247324,
+        "rho1": 0.4565290064249487,
+        "rho2": 0.45369721479825176,
+        "best_dev1": {
+          "value": 0.4584472799521808,
+          "strategy": [
+            0.0,
+            0.5699421727690278,
+            0.0,
+            0.4300578272309723,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.480472119550725,
+          "strategy": [
+            0.0,
+            0.46046644776506074,
+            0.4152337501747282,
+            0.12429980206021113,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.02677490475247324,
+      "theta": [
+        -281.2839119355433,
+        6.349834111795012
+      ],
+      "start_index": 2,
+      "start_iteration": 200
+    },
+    {
+      "iteration": 2800,
+      "residual_norm": 0.7080658285682109,
+      "objective": 0.2506786087929935,
+      "x": [
+        0.0031791334778606987,
+        0.5708951844388649,
+        0.000673056136738531,
+        0.2479106265013344,
+        0.17734199944520143
+      ],
+      "y": [
+        0.0014294544441150045,
+        0.16734077283604268,
+        0.03598690535427149,
+        0.7952225133875548,
+        2.0353978016135976e-05
+      ],
+      "certificate": {
+        "eta": 0.025161296600529737,
+        "regret1": 0.0024396756784250684,
+        "regret2": 0.025161296600529737,
+        "rho1": 0.455617401742759,
+        "rho2": 0.45380695209119976,
+        "best_dev1": {
+          "value": 0.45805707742118407,
+          "strategy": [
+            0.0,
+            0.32468426299502107,
+            0.0,
+            0.4385740706796813,
+            0.2367416663252977
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.4789682486917295,
+          "strategy": [
+            0.0,
+            0.403779563675149,
+            0.390869415035468,
+            0.20535102128938304,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.025161296600529737,
+      "theta": [
+        -281.2839119355433,
+        6.349834111795012
+      ],
+      "start_index": 2,
+      "start_iteration": 300
+    },
+    {
+      "iteration": 2900,
+      "residual_norm": 0.7077443447629596,
+      "objective": 0.2504510287719755,
+      "x": [
+        0.0023392508631926265,
+        0.5671791887888622,
+        0.0008185451623537254,
+        0.23901178057490322,
+        0.1906512346106882
+      ],
+      "y": [
+        0.0007520495607908844,
+        0.17787031825558583,
+        0.03227782355470248,
+        0.7890889250014779,
+        1.0883627442989689e-05
+      ],
+      "certificate": {
+        "eta": 0.024150429898463388,
+        "regret1": 0.002894006171208885,
+        "regret2": 0.024150429898463388,
+        "rho1": 0.4551723682650747,
+        "rho2": 0.4539837830473936,
+        "best_dev1": {
+          "value": 0.45806637443628356,
+          "strategy": [
+            0.0,
+            0.28520745930894736,
+            0.0,
+            0.4320115663365417,
+            0.28278097435451094
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.478134212945857,
+          "strategy": [
+            0.0,
+            0.3633623323157879,
+            0.3750413869705762,
+            0.26159628071363594,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.024150429898463388,
+      "theta": [
+        -281.2839119355433,
+        6.349834111795012
+      ],
+      "start_index": 2,
+      "start_iteration": 400
+    },
+    {
+      "iteration": 3000,
+      "residual_norm": 0.7075613445386966,
+      "objective": 0.25032152814270403,
+      "x": [
+        0.0018886240730240577,
+        0.5641930114209268,
+        0.0009486936665594626,
+        0.23246382760796397,
+        0.20050584323152568
+      ],
+      "y": [
+        0.0004689899580567976,
+        0.18500987768215216,
+        0.029903803515400607,
+        0.7846102134147721,
+        7.115429618375169e-06
+      ],
+      "certificate": {
+        "eta": 0.02347398245841531,
+        "regret1": 0.0032171306469247485,
+        "regret2": 0.02347398245841531,
+        "rho1": 0.4549012041619699,
+        "rho2": 0.45415120540507825,
+        "best_dev1": {
+          "value": 0.45811833480889463,
+          "strategy": [
+            0.0,
+            0.2867346886241758,
+            0.0,
+            0.43135689297494245,
+            0.2819084184008817
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.47762518786349356,
+          "strategy": [
+            0.0,
+            0.3333952697625348,
+            0.36415276941517477,
+            0.30245196082229037,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.02347398245841531,
+      "theta": [
+        -281.2839119355433,
+        6.349834111795012
+      ],
+      "start_index": 2,
+      "start_iteration": 500
+    },
+    {
+      "iteration": 3100,
+      "residual_norm": 0.7074489229620887,
+      "objective": 0.25024198930010966,
+      "x": [
+        0.0016152667019789279,
+        0.5617722387732024,
+        0.0010644533311011091,
+        0.227483513207318,
+        0.20806452798639957
+      ],
+      "y": [
+        0.00032620550408092477,
+        0.19010262586994084,
+        0.02825162256587306,
+        0.7813142961760066,
+        5.249884098520731e-06
+      ],
+      "certificate": {
+        "eta": 0.022527343988602178,
+        "regret1": 0.0034470886602246953,
+        "regret2": 0.022527343988602178,
+        "rho1": 0.4547164685491407,
+        "rho2": 0.45429756775657215,
+        "best_dev1": {
+          "value": 0.4581635572093654,
+          "strategy": [
+            0.0,
+            0.27877191898452264,
+            0.013545213143912627,
+            0.4270735415265851,
+            0.28060932634497954
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.47682491174517433,
+          "strategy": [
+            0.0,
+            0.33792343345299064,
+            0.36662439202241587,
+            0.29545217452459355,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.022527343988602178,
+      "theta": [
+        -281.2839119355433,
+        6.349834111795012
+      ],
+      "start_index": 2,
+      "start_iteration": 600
+    },
+    {
+      "iteration": 3200,
+      "residual_norm": 0.7073759674912046,
+      "objective": 0.2501903796920589,
+      "x": [
+        0.001435060080872041,
+        0.5597805125015501,
+        0.0011668237500457976,
+        0.223594531026597,
+        0.2140230726409351
+      ],
+      "y": [
+        0.0002445738470681464,
+        0.19387285810644064,
+        0.02703163419074926,
+        0.778846744948729,
+        4.188907013099977e-06
+      ],
+      "certificate": {
+        "eta": 0.02175328654072034,
+        "regret1": 0.0036195787490233,
+        "regret2": 0.02175328654072034,
+        "rho1": 0.45458145001055095,
+        "rho2": 0.4544231644895771,
+        "best_dev1": {
+          "value": 0.45820102875957425,
+          "strategy": [
+            0.0,
+            0.27970293770283744,
+            0.01332131604691286,
+            0.4267773778236106,
+            0.2801983684266391
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.47617645103029743,
+          "strategy": [
+            0.0,
+            0.3421393528971989,
+            0.3687237006175972,
+            0.28913694648520394,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.02175328654072034,
+      "theta": [
+        -281.2839119355433,
+        6.349834111795012
+      ],
+      "start_index": 2,
+      "start_iteration": 700
+    },
+    {
+      "iteration": 3300,
+      "residual_norm": 0.7073266074777643,
+      "objective": 0.25015546482300166,
+      "x": [
+        0.0013089798511598857,
+        0.5581165960913056,
+        0.0012569692398536514,
+        0.2204936341904279,
+        0.218823820627253
+      ],
+      "y": [
+        0.00019356437815136644,
+        0.19673802424123357,
+        0.026089431019057,
+        0.7769754548407627,
+        3.5255207953414e-06
+      ],
+      "certificate": {
+        "eta": 0.02111729168270754,
+        "regret1": 0.003752137910206621,
+        "regret2": 0.02111729168270754,
+        "rho1": 0.45447771083554334,
+        "rho2": 0.45453077138539694,
+        "best_dev1": {
+          "value": 0.45822984874574996,
+          "strategy": [
+            0.0,
+            0.2804167106489129,
+            0.013148112461813287,
+            0.4265525872315859,
+            0.2798825896576879
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.4756480630681045,
+          "strategy": [
+            0.0,
+            0.3456180178188993,
+            0.37037651336658706,
+            0.2840054688145137,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.02111729168270754,
+      "theta": [
+        -281.2839119355433,
+        6.349834111795012
+      ],
+      "start_index": 2,
+      "start_iteration": 800
+    },
+    {
+      "iteration": 3400,
+      "residual_norm": 0.7072920910429641,
+      "objective": 0.2501310510259643,
+      "x": [
+        0.0012167618378370578,
+        0.5567067668980157,
+        0.0013361229437252823,
+        0.21797931804809648,
+        0.2227610302723255
+      ],
+      "y": [
+        0.00015951175303866038,
+        0.1989560611357981,
+        0.025335550703163904,
+        0.7755457949648341,
+        3.0814431652633824e-06
+      ],
+      "certificate": {
+        "eta": 0.020587463704057563,
+        "regret1": 0.0038571078145646642,
+        "regret2": 0.020587463704057563,
+        "rho1": 0.4543949116100842,
+        "rho2": 0.4546233642437953,
+        "best_dev1": {
+          "value": 0.4582520194246489,
+          "strategy": [
+            0.0,
+            0.2809741311753888,
+            0.013013372848164485,
+            0.4263795161281942,
+            0.27963297984825247
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.47521082794785285,
+          "strategy": [
+            0.0,
+            0.34852660250640977,
+            0.37170171891078396,
+            0.27977167858280627,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.020587463704057563,
+      "theta": [
+        -281.2839119355433,
+        6.349834111795012
+      ],
+      "start_index": 2,
+      "start_iteration": 900
+    },
+    {
+      "iteration": 3500,
+      "residual_norm": 0.7072672959812066,
+      "objective": 0.2501135139822839,
+      "x": [
+        0.0011469553964245597,
+        0.5554969899194155,
+        0.0014055005221857853,
+        0.21591260376544283,
+        0.22603795039653143
+      ],
+      "y": [
+        0.00013559314216024233,
+        0.20069566293689597,
+        0.024714825932716726,
+        0.7744511494007078,
+        2.7685875191209493e-06
+      ],
+      "certificate": {
+        "eta": 0.020140761250419636,
+        "regret1": 0.003942252456072215,
+        "regret2": 0.020140761250419636,
+        "rho1": 0.4543267995013354,
+        "rho2": 0.4547035551669431,
+        "best_dev1": {
+          "value": 0.45826905195740764,
+          "strategy": [
+            0.0,
+            0.281415385164592,
+            0.012907997053998784,
+            0.42624518514080967,
+            0.2794314326405995
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.47484431641736274,
+          "strategy": [
+            0.0,
+            0.35098632182314543,
+            0.3727803259538834,
+            0.27623335222297113,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.020140761250419636,
+      "theta": [
+        -281.2839119355433,
+        6.349834111795012
+      ],
+      "start_index": 2,
+      "start_iteration": 1000
+    },
+    {
+      "iteration": 3600,
+      "residual_norm": 0.7072490796550281,
+      "objective": 0.2501006303364422,
+      "x": [
+        0.0010926519887396817,
+        0.5544470998603382,
+        0.0014662468717287856,
+        0.21419456045169194,
+        0.2287994408275014
+      ],
+      "y": [
+        0.00011810380676024406,
+        0.202072230977023,
+        0.024191536685691316,
+        0.7736155892315933,
+        2.539298932149156e-06
+      ],
+      "certificate": {
+        "eta": 0.0197816500946556,
+        "regret1": 0.004012696075404554,
+        "regret2": 0.0197816500946556,
+        "rho1": 0.4542693766870941,
+        "rho2": 0.4547735034869378,
+        "best_dev1": {
+          "value": 0.45828207276249866,
+          "strategy": [
+            0.0,
+            0.2817681444454216,
+            0.012825308542107563,
+            0.42614059096802914,
+            0.27926595604444165
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.4745551535815934,
+          "strategy": [
+            0.0,
+            0.31470959592544845,
+            0.3345855742792888,
+            0.35070482979526274,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.0197816500946556,
+      "theta": [
+        -281.2839119355433,
+        6.349834111795012
+      ],
+      "start_index": 2,
+      "start_iteration": 1100
+    },
+    {
+      "iteration": 3700,
+      "residual_norm": 0.7072354384204724,
+      "objective": 0.2500909826788989,
+      "x": [
+        0.0010494602740305904,
+        0.5535267673583557,
+        0.0015194091859358728,
+        0.2127528602754507,
+        0.23115150290622702
+      ],
+      "y": [
+        0.00010489380774077524,
+        0.2031675881612716,
+        0.02374162526858431,
+        0.7729835268553128,
+        2.365907090578465e-06
+      ],
+      "certificate": {
+        "eta": 0.019485271879091937,
+        "regret1": 0.004071952890452479,
+        "regret2": 0.019485271879091937,
+        "rho1": 0.4542199742863431,
+        "rho2": 0.45483495817316816,
+        "best_dev1": {
+          "value": 0.45829192717679557,
+          "strategy": [
+            0.0,
+            0.2820521274214429,
+            0.012760375503915854,
+            0.426059252952395,
+            0.27912824412224624
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.4743202300522601,
+          "strategy": [
+            0.0,
+            0.31316743327914875,
+            0.332204723589317,
+            0.3546278431315342,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.019485271879091937,
+      "theta": [
+        -281.2839119355433,
+        6.349834111795012
+      ],
+      "start_index": 2,
+      "start_iteration": 1200
+    },
+    {
+      "iteration": 3800,
+      "residual_norm": 0.7072250532701262,
+      "objective": 0.25008363798646643,
+      "x": [
+        0.001014467935257274,
+        0.5527127348766083,
+        0.001565927226626296,
+        0.2115334133784387,
+        0.23317345658306948
+      ],
+      "y": [
+        9.464632526142115e-05,
+        0.20404145428687231,
+        0.023348351385780636,
+        0.7725133165912454,
+        2.2314108403081314e-06
+      ],
+      "certificate": {
+        "eta": 0.019232051799494887,
+        "regret1": 0.004122510002006141,
+        "regret2": 0.019232051799494887,
+        "rho1": 0.454176747402377,
+        "rho2": 0.4548893283311287,
+        "best_dev1": {
+          "value": 0.45829925740438315,
+          "strategy": [
+            0.0,
+            0.2822817823987224,
+            0.012709507135097716,
+            0.4259963705018739,
+            0.279012339964306
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.4741213801306236,
+          "strategy": [
+            0.0,
+            0.31184908774506953,
+            0.33017091937825294,
+            0.3579799928766776,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.019232051799494887,
+      "theta": [
+        -281.2839119355433,
+        6.349834111795012
+      ],
+      "start_index": 2,
+      "start_iteration": 1300
+    },
+    {
+      "iteration": 3900,
+      "residual_norm": 0.7072170320127122,
+      "objective": 0.2500779651844348,
+      "x": [
+        0.000985674452412222,
+        0.551986909485354,
+        0.0016066338285850553,
+        0.2104949777015238,
+        0.23492580453212494
+      ],
+      "y": [
+        8.651800536476281e-05,
+        0.20473846673861767,
+        0.022999740842402836,
+        0.7721731495426368,
+        2.1248709778635897e-06
+      ],
+      "certificate": {
+        "eta": 0.019013774029058073,
+        "regret1": 0.004166174622670493,
+        "regret2": 0.019013774029058073,
+        "rho1": 0.4541383832209129,
+        "rho2": 0.4549377507201639,
+        "best_dev1": {
+          "value": 0.45830455784358337,
+          "strategy": [
+            0.0,
+            0.28246794271407294,
+            0.012669901176078713,
+            0.42594830546606866,
+            0.2789138506437797
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.473951524749222,
+          "strategy": [
+            0.0,
+            0.3107154244050211,
+            0.3284189645303078,
+            0.36086561106467124,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.019013774029058073,
+      "theta": [
+        -281.2839119355433,
+        6.349834111795012
+      ],
+      "start_index": 2,
+      "start_iteration": 1400
+    },
+    {
+      "iteration": 4000,
+      "residual_norm": 0.7072107569099315,
+      "objective": 0.2500735273445591,
+      "x": [
+        0.0009616644361992741,
+        0.5513350291350753,
+        0.0016422609912263018,
+        0.20960557721203069,
+        0.23645546822546834
+      ],
+      "y": [
+        7.994808020286879e-05,
+        0.2052926583831287,
+        0.022687022985273156,
+        0.7719383315773811,
+        2.0389740141887963e-06
+      ],
+      "certificate": {
+        "eta": 0.018824130396247585,
+        "regret1": 0.0042042897910885,
+        "regret2": 0.018824130396247585,
+        "rho1": 0.45410392419500717,
+        "rho2": 0.4549811463786118,
+        "best_dev1": {
+          "value": 0.45830821398609567,
+          "strategy": [
+            0.0,
+            0.28261888922540224,
+            0.01263939977580628,
+            0.4259122490318572,
+            0.27882946196693426
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.4738052767748594,
+          "strategy": [
+            0.0,
+            0.3097355319454163,
+            0.32689861879681203,
+            0.36336584925777154,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.018824130396247585,
+      "theta": [
+        -281.2839119355433,
+        6.349834111795012
+      ],
+      "start_index": 2,
+      "start_iteration": 1500
+    },
+    {
+      "iteration": 4100,
+      "residual_norm": 0.7072057914706437,
+      "objective": 0.25007001574480975,
+      "x": [
+        0.0009414109842185826,
+        0.5507457155336153,
+        0.0016734486518195015,
+        0.20884005678657538,
+        0.2377993680437713
+      ],
+      "y": [
+        7.455157842866218e-05,
+        0.20573041556114247,
+        0.022403639088174013,
+        0.7717894251019034,
+        1.9686703513796957e-06
+      ],
+      "certificate": {
+        "eta": 0.018658202499652943,
+        "regret1": 0.004237873192911468,
+        "regret2": 0.018658202499652943,
+        "rho1": 0.4540726567519251,
+        "rho2": 0.4550202658455831,
+        "best_dev1": {
+          "value": 0.45831052994483656,
+          "strategy": [
+            0.0,
+            0.2827410558659605,
+            0.012616319327049359,
+            0.42588599911097497,
+            0.27875662569601517
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.473678468345236,
+          "strategy": [
+            0.0,
+            0.3088847070864897,
+            0.32557057748725377,
+            0.36554471542625666,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.018658202499652943,
+      "theta": [
+        -281.2839119355433,
+        6.349834111795012
+      ],
+      "start_index": 2,
+      "start_iteration": 1600
+    },
+    {
+      "iteration": 4200,
+      "residual_norm": 0.7072018217103805,
+      "objective": 0.2500672083152404,
+      "x": [
+        0.0009241527536146854,
+        0.5502097910642014,
+        0.0017007544039344441,
+        0.20817837305855702,
+        0.23898692871969238
+      ],
+      "y": [
+        7.005684318206702e-05,
+        0.2060724912370339,
+        0.022144593653959845,
+        0.7717109478892903,
+        1.910376533883002e-06
+      ],
+      "certificate": {
+        "eta": 0.01851210320164748,
+        "regret1": 0.004267709223281069,
+        "regret2": 0.01851210320164748,
+        "rho1": 0.45404403895167755,
+        "rho2": 0.45505572458282567,
+        "best_dev1": {
+          "value": 0.4583117481749586,
+          "strategy": [
+            0.0,
+            0.2828395119395235,
+            0.01259933039474167,
+            0.4258678068522098,
+            0.278693350813525
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.47356782778447315,
+          "strategy": [
+            0.0,
+            0.3081429993757772,
+            0.3244036783208879,
+            0.367453322303335,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.01851210320164748,
+      "theta": [
+        -281.2839119355433,
+        6.349834111795012
+      ],
+      "start_index": 2,
+      "start_iteration": 1700
+    },
+    {
+      "iteration": 4300,
+      "residual_norm": 0.7071986181577439,
+      "objective": 0.2500649427621112,
+      "x": [
+        0.0009093145735819288,
+        0.549719778760621,
+        0.001724663171751141,
+        0.2076043745072649,
+        0.240041868986781
+      ],
+      "y": [
+        6.62675374182366e-05,
+        0.20633541066729388,
+        0.02190601874616434,
+        0.7716904415602769,
+        1.861488846739315e-06
+      ],
+      "certificate": {
+        "eta": 0.0183827231757816,
+        "regret1": 0.0042944116452497405,
+        "regret2": 0.0183827231757816,
+        "rho1": 0.454017652156884,
+        "rho2": 0.45508803054237923,
+        "best_dev1": {
+          "value": 0.45831206380213374,
+          "strategy": [
+            0.0,
+            0.28291830013337843,
+            0.012587371770262248,
+            0.425856268008704,
+            0.2786380600876553
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.47347075371816083,
+          "strategy": [
+            0.0,
+            0.30749414363387717,
+            0.32337292033155607,
+            0.36913293603456687,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.0183827231757816,
+      "theta": [
+        -281.2839119355433,
+        6.349834111795012
+      ],
+      "start_index": 2,
+      "start_iteration": 1800
+    },
+    {
+      "iteration": 4400,
+      "residual_norm": 0.7071960107113411,
+      "objective": 0.25006309878301763,
+      "x": [
+        0.0008964547023622524,
+        0.549269531146376,
+        0.001745596313591613,
+        0.207104914479703,
+        0.240983503357967
+      ],
+      "y": [
+        6.303875217130643e-05,
+        0.2065324749367409,
+        0.02168487459075806,
+        0.7717177916440163,
+        1.8200763133933211e-06
+      ],
+      "certificate": {
+        "eta": 0.018267548332067174,
+        "regret1": 0.004318467212862165,
+        "regret2": 0.018267548332067174,
+        "rho1": 0.45399316796883815,
+        "rho2": 0.45511760561885617,
+        "best_dev1": {
+          "value": 0.4583116351817003,
+          "strategy": [
+            0.0,
+            0.28298067860242865,
+            0.012579588046659955,
+            0.42585024432538476,
+            0.27858948902552666
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.47338515395092334,
+          "strategy": [
+            0.0,
+            0.30692476527467044,
+            0.32245803230174297,
+            0.37061720242358664,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.018267548332067174,
+      "theta": [
+        -281.2839119355433,
+        6.349834111795012
+      ],
+      "start_index": 2,
+      "start_iteration": 1900
+    },
+    {
+      "iteration": 4500,
+      "residual_norm": 0.7071938716592079,
+      "objective": 0.25006158605617007,
+      "x": [
+        0.0008852289029722609,
+        0.5488539511405589,
+        0.0017639199071541585,
+        0.20666919555618568,
+        0.24182770449312896
+      ],
+      "y": [
+        6.0261534574276675e-05,
+        0.20667449143808533,
+        0.021478739609110998,
+        0.771784722737236,
+        1.7846809934779193e-06
+      ],
+      "certificate": {
+        "eta": 0.018164526071828058,
+        "regret1": 0.004340266654627278,
+        "regret2": 0.018164526071828058,
+        "rho1": 0.45397032513238533,
+        "rho2": 0.4551448023950928,
+        "best_dev1": {
+          "value": 0.4583105917870126,
+          "strategy": [
+            0.0,
+            0.2830292976682247,
+            0.012575283630358602,
+            0.42584880555574095,
+            0.27854661314567586
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.47330932846692086,
+          "strategy": [
+            0.0,
+            0.3064237808222366,
+            0.3216424208906938,
+            0.3719337982870697,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.018164526071828058,
+      "theta": [
+        -281.2839119355433,
+        6.349834111795012
+      ],
+      "start_index": 2,
+      "start_iteration": 2000
+    },
+    {
+      "iteration": 4500,
+      "residual_norm": 0.23922460566328585,
+      "objective": 0.028614205977377308,
+      "x": [
+        0.12350929810083237,
+        0.5714870154220796,
+        0.13383259278466608,
+        0.11737907494210807,
+        0.05379201875031401
+      ],
+      "y": [
+        0.6825717823971761,
+        0.18028790681031112,
+        0.01922205778427376,
+        0.0811599397060185,
+        0.03675831330222042
+      ],
+      "certificate": {
+        "eta": 0.05916046822724763,
+        "regret1": 0.05916046822724763,
+        "regret2": 0.051442138415141336,
+        "rho1": 0.4661024500890776,
+        "rho2": 0.45090269343904144,
+        "best_dev1": {
+          "value": 0.5252629183163252,
+          "strategy": [
+            0.0,
+            0.02703033712921978,
+            0.6410584509408528,
+            0.33191121192992745,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.5023448318541828,
+          "strategy": [
+            0.0,
+            0.5448048449310531,
+            0.455195155068947,
+            0.0,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.05916046822724763,
+      "theta": [
+        0.5256506542242163,
+        0.4905562733960747
+      ],
+      "start_index": 3,
+      "start_iteration": 0
+    },
+    {
+      "iteration": 4600,
+      "residual_norm": 0.7182490302660309,
+      "objective": 0.2579408347390469,
+      "x": [
+        6.683902163979724e-06,
+        0.9486502037610388,
+        0.00011021832084670692,
+        2.124861041614e-05,
+        0.05121164540553444
+      ],
+      "y": [
+        4.503969669996114e-06,
+        7.715972942758715e-07,
+        0.9999940078532966,
+        1.914275283372515e-07,
+        5.251522107767297e-07
+      ],
+      "certificate": {
+        "eta": 0.02816369752188347,
+        "regret1": 0.011698457165909448,
+        "regret2": 0.02816369752188347,
+        "rho1": 0.4933843908905048,
+        "rho2": 0.4711653053313268,
+        "best_dev1": {
+          "value": 0.5050828480564142,
+          "strategy": [
+            0.04950472483120278,
+            0.4769924565007029,
+            0.0,
+            0.0,
+            0.4735028186680943
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.49932900285321025,
+          "strategy": [
+            0.0,
+            0.3831284057771146,
+            0.6168715942228854,
+            0.0,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.02816369752188347,
+      "theta": [
+        -82.36990264208278,
+        552.5569625334628
+      ],
+      "start_index": 3,
+      "start_iteration": 100
+    },
+    {
+      "iteration": 4700,
+      "residual_norm": 0.7119705200669977,
+      "objective": 0.2534510107222356,
+      "x": [
+        0.00011314915631745556,
+        0.9331165788061577,
+        6.77147289049627e-05,
+        8.91707112807972e-06,
+        0.0666936402374917
+      ],
+      "y": [
+        9.679554135029876e-06,
+        1.0053174196073382e-05,
+        0.9999793718701007,
+        7.901780460074791e-07,
+        1.0522352216456094e-07
+      ],
+      "certificate": {
+        "eta": 0.028702521732841324,
+        "regret1": 0.011072202569750444,
+        "regret2": 0.028702521732841324,
+        "rho1": 0.49401004196229753,
+        "rho2": 0.4690685823280881,
+        "best_dev1": {
+          "value": 0.505082244532048,
+          "strategy": [
+            0.04949765456256776,
+            0.47699788623000267,
+            0.0,
+            0.0,
+            0.4735044592074296
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.49777110406092945,
+          "strategy": [
+            0.0,
+            0.38850184603069904,
+            0.611498153969301,
+            0.0,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.028702521732841324,
+      "theta": [
+        -82.36990264208278,
+        552.5569625334628
+      ],
+      "start_index": 3,
+      "start_iteration": 200
+    },
+    {
+      "iteration": 4800,
+      "residual_norm": 0.7097323757580911,
+      "objective": 0.2518600225996121,
+      "x": [
+        0.000435737379812383,
+        0.9265853815141833,
+        4.470899616099642e-05,
+        4.823310556170946e-06,
+        0.07292934879928688
+      ],
+      "y": [
+        1.1585532365081687e-05,
+        3.238120891909691e-05,
+        0.9999544955938354,
+        1.4998531215496515e-06,
+        3.781175870475316e-08
+      ],
+      "certificate": {
+        "eta": 0.028941751864615506,
+        "regret1": 0.010805102724246951,
+        "regret2": 0.028941751864615506,
+        "rho1": 0.4942759217375997,
+        "rho2": 0.46820966502084294,
+        "best_dev1": {
+          "value": 0.5050810244618467,
+          "strategy": [
+            0.04949665985711831,
+            0.4769984328543007,
+            0.0,
+            0.0,
+            0.473504907288581
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.49715141688545844,
+          "strategy": [
+            0.0,
+            0.390764597052911,
+            0.609235402947089,
+            0.0,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.028941751864615506,
+      "theta": [
+        -82.36990264208278,
+        552.5569625334628
+      ],
+      "start_index": 3,
+      "start_iteration": 300
+    },
+    {
+      "iteration": 4900,
+      "residual_norm": 0.7086862068466078,
+      "objective": 0.25111806988731644,
+      "x": [
+        0.000982243311177215,
+        0.9223544179277148,
+        3.320693092474601e-05,
+        3.1634450512779544e-06,
+        0.07662696838513201
+      ],
+      "y": [
+        1.2337888633864556e-05,
+        6.517662603654552e-05,
+        0.999920230428977,
+        2.235689833731868e-06,
+        1.9366518936401358e-08
+      ],
+      "certificate": {
+        "eta": 0.029107966255229156,
+        "regret1": 0.01066568555404368,
+        "regret2": 0.029107966255229156,
+        "rho1": 0.4944135798676712,
+        "rho2": 0.46768309229960975,
+        "best_dev1": {
+          "value": 0.5050792654217149,
+          "strategy": [
+            0.04949794050639135,
+            0.4769971705118824,
+            0.0,
+            0.0,
+            0.47350488898172627
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.4967910585548389,
+          "strategy": [
+            0.0,
+            0.3922043781228367,
+            0.6077956218771633,
+            0.0,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.029107966255229156,
+      "theta": [
+        -82.36990264208278,
+        552.5569625334628
+      ],
+      "start_index": 3,
+      "start_iteration": 400
+    },
+    {
+      "iteration": 5000,
+      "residual_norm": 0.7081283832056405,
+      "objective": 0.25072290355071725,
+      "x": [
+        0.001695329584831854,
+        0.9189683669540707,
+        2.67640160574861e-05,
+        2.342457832782137e-06,
+        0.07930719698720731
+      ],
+      "y": [
+        1.2704395405391132e-05,
+        0.00010470133691840709,
+        0.9998796080990985,
+        2.9739082967004785e-06,
+        1.2260280896293728e-08
+      ],
+      "certificate": {
+        "eta": 0.02925007579850497,
+        "regret1": 0.010591567588559225,
+        "regret2": 0.02925007579850497,
+        "rho1": 0.49448558291263406,
+        "rho2": 0.4672858990310797,
+        "best_dev1": {
+          "value": 0.5050771505011933,
+          "strategy": [
+            0.04950010204213344,
+            0.47699519819867353,
+            0.0,
+            0.0,
+            0.47350469975919307
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.49653597482958467,
+          "strategy": [
+            0.0,
+            0.3933326842445606,
+            0.6066673157554394,
+            0.0,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.02925007579850497,
+      "theta": [
+        -82.36990264208278,
+        552.5569625334628
+      ],
+      "start_index": 3,
+      "start_iteration": 500
+    },
+    {
+      "iteration": 5100,
+      "residual_norm": 0.7078053913893927,
+      "objective": 0.2504942360399457,
+      "x": [
+        0.0025043020888715377,
+        0.9159972325666653,
+        2.2790319485733425e-05,
+        1.876636075689211e-06,
+        0.08147379838890187
+      ],
+      "y": [
+        1.2936473932888715e-05,
+        0.00014795794025135626,
+        0.9998353907540651,
+        3.7059522030959097e-06,
+        8.879547617042565e-09
+      ],
+      "certificate": {
+        "eta": 0.029380955659930708,
+        "regret1": 0.010531125556198506,
+        "regret2": 0.029380955659930708,
+        "rho1": 0.49454371041735856,
+        "rho2": 0.4669534160517217,
+        "best_dev1": {
+          "value": 0.5050748359735571,
+          "strategy": [
+            0.049502618490025095,
+            0.47699293550380395,
+            0.0,
+            0.0,
+            0.4735044460061709
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.4963343717116524,
+          "strategy": [
+            0.0,
+            0.3943071180386447,
+            0.6056928819613553,
+            0.0,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.029380955659930708,
+      "theta": [
+        -82.36990264208278,
+        552.5569625334628
+      ],
+      "start_index": 3,
+      "start_iteration": 600
+    },
+    {
+      "iteration": 5100,
+      "residual_norm": 0.276191023086065,
+      "objective": 0.03814074061666365,
+      "x": [
+        0.4745683157948769,
+        0.04753173812901563,
+        0.1743244948829221,
+        0.17561090208175903,
+        0.1279645491114264
+      ],
+      "y": [
+        0.15883206247966764,
+        0.47406588537462435,
+        0.02429344597884825,
+        0.20510209350228029,
+        0.13770651266457962
+      ],
+      "certificate": {
+        "eta": 0.06219111668375349,
+        "regret1": 0.06219111668375349,
+        "regret2": 0.015163399801361277,
+        "rho1": 0.4237012622656553,
+        "rho2": 0.479572771258041,
+        "best_dev1": {
+          "value": 0.4858923789494088,
+          "strategy": [
+            0.0,
+            0.6103018267453005,
+            0.0,
+            0.3896981732546995,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.49473617105940226,
+          "strategy": [
+            0.0,
+            0.7882956227955212,
+            0.011111554919706262,
+            0.0,
+            0.20059282228477246
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.06219111668375349,
+      "theta": [
+        0.45758693372765114,
+        0.5109222901783631
+      ],
+      "start_index": 4,
+      "start_iteration": 0
+    },
+    {
+      "iteration": 5200,
+      "residual_norm": 0.7101741663549751,
+      "objective": 0.2521736732789919,
+      "x": [
+        5.521947158859284e-07,
+        0.5418287087062206,
+        0.0002401093703920308,
+        0.2904384959565191,
+        0.16749213377215244
+      ],
+      "y": [
+        0.00023158324128577526,
+        0.49393780699456935,
+        0.009269841757461901,
+        0.4964654199399648,
+        9.534806671813354e-05
+      ],
+      "certificate": {
+        "eta": 0.0189065855254687,
+        "regret1": 0.003876559801924917,
+        "regret2": 0.0189065855254687,
+        "rho1": 0.45621894388728845,
+        "rho2": 0.4594635172288975,
+        "best_dev1": {
+          "value": 0.46009550368921337,
+          "strategy": [
+            0.0,
+            0.39947016372735583,
+            0.0295289240563132,
+            0.37106307473052585,
+            0.19993783748580507
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.4783701027543662,
+          "strategy": [
+            0.0,
+            0.3815517152429795,
+            0.4166398989457331,
+            0.2018083858112875,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.0189065855254687,
+      "theta": [
+        1.0818848907476661,
+        1.9189732802069284
+      ],
+      "start_index": 4,
+      "start_iteration": 100
+    },
+    {
+      "iteration": 5300,
+      "residual_norm": 0.708717615459821,
+      "objective": 0.2511403292315274,
+      "x": [
+        1.0798210149646233e-07,
+        0.5280756939361361,
+        0.00010494870911446272,
+        0.2812616283529247,
+        0.19055762101972332
+      ],
+      "y": [
+        0.0001226914238978639,
+        0.46735980251033465,
+        0.007819658525439636,
+        0.5246796809527156,
+        1.816658761231825e-05
+      ],
+      "certificate": {
+        "eta": 0.016539317122396535,
+        "regret1": 0.004058106574452158,
+        "regret2": 0.016539317122396535,
+        "rho1": 0.4561967482441007,
+        "rho2": 0.46062944074633216,
+        "best_dev1": {
+          "value": 0.4602548548185529,
+          "strategy": [
+            0.0,
+            0.38074605557156826,
+            0.022357804044773343,
+            0.38059016994956685,
+            0.21630597043409147
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.4771687578687287,
+          "strategy": [
+            0.0,
+            0.37504009545814226,
+            0.3916003668921442,
+            0.23335953764971346,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.016539317122396535,
+      "theta": [
+        1.0818848907476661,
+        1.9189732802069284
+      ],
+      "start_index": 4,
+      "start_iteration": 200
+    },
+    {
+      "iteration": 5400,
+      "residual_norm": 0.7082369395183317,
+      "objective": 0.2507997812491465,
+      "x": [
+        4.710120899529965e-08,
+        0.5208220283767396,
+        6.263169687907364e-05,
+        0.27612764252303224,
+        0.20298765030213994
+      ],
+      "y": [
+        8.707330809473302e-05,
+        0.4502569922043568,
+        0.00689279997474461,
+        0.542755014788551,
+        8.119724252767888e-06
+      ],
+      "certificate": {
+        "eta": 0.01564697541022908,
+        "regret1": 0.004171133326079102,
+        "regret2": 0.01564697541022908,
+        "rho1": 0.4561181719468429,
+        "rho2": 0.4609937003416966,
+        "best_dev1": {
+          "value": 0.460289305272922,
+          "strategy": [
+            0.0,
+            0.37025044941172314,
+            0.018799263254187785,
+            0.3859063981695358,
+            0.22504388916455317
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.4766406757519257,
+          "strategy": [
+            0.0,
+            0.37096927882515457,
+            0.3782244683449798,
+            0.2508062528298656,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.01564697541022908,
+      "theta": [
+        1.0818848907476661,
+        1.9189732802069284
+      ],
+      "start_index": 4,
+      "start_iteration": 300
+    },
+    {
+      "iteration": 5500,
+      "residual_norm": 0.7080213425578041,
+      "objective": 0.25064711075867774,
+      "x": [
+        2.840369505439344e-08,
+        0.5162575004895541,
+        4.305463073694044e-05,
+        0.27273316857839114,
+        0.210966247897623
+      ],
+      "y": [
+        6.965719032474391e-05,
+        0.4378497474392883,
+        0.006263749342246413,
+        0.5558117879272872,
+        5.05810085339668e-06
+      ],
+      "certificate": {
+        "eta": 0.015125680963163468,
+        "regret1": 0.004250811057320392,
+        "regret2": 0.015125680963163468,
+        "rho1": 0.45603548123220516,
+        "rho2": 0.4612203020030998,
+        "best_dev1": {
+          "value": 0.46028629228952556,
+          "strategy": [
+            0.0,
+            0.363266389163809,
+            0.016645656419947835,
+            0.38942838047521733,
+            0.23065957394102593
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.4763459829662633,
+          "strategy": [
+            0.0,
+            0.3681125568257313,
+            0.3696873588690926,
+            0.2622000843051761,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.015125680963163468,
+      "theta": [
+        1.0818848907476661,
+        1.9189732802069284
+      ],
+      "start_index": 4,
+      "start_iteration": 400
+    },
+    {
+      "iteration": 5600,
+      "residual_norm": 0.7079067244754845,
+      "objective": 0.25056596527880476,
+      "x": [
+        2.0250498509966164e-08,
+        0.5131102548346126,
+        3.212205079890501e-05,
+        0.2702925189223744,
+        0.21656508394171559
+      ],
+      "y": [
+        5.937423741314973e-05,
+        0.42823616153217003,
+        0.00581247869688477,
+        0.565888264176192,
+        3.7213573401638093e-06
+      ],
+      "certificate": {
+        "eta": 0.01478606772793195,
+        "regret1": 0.00431097633758315,
+        "regret2": 0.01478606772793195,
+        "rho1": 0.4559588914755469,
+        "rho2": 0.46137386373632455,
+        "best_dev1": {
+          "value": 0.46026986781313006,
+          "strategy": [
+            0.0,
+            0.35817734481929797,
+            0.015197058722839588,
+            0.3919845115427745,
+            0.23464108491508792
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.4761599314642565,
+          "strategy": [
+            0.0,
+            0.3659796318314473,
+            0.36372012182999347,
+            0.2703002463385592,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.01478606772793195,
+      "theta": [
+        1.0818848907476661,
+        1.9189732802069284
+      ],
+      "start_index": 4,
+      "start_iteration": 500
+    },
+    {
+      "iteration": 5700,
+      "residual_norm": 0.7078383763615019,
+      "objective": 0.2505175835250436,
+      "x": [
+        1.5929869931227697e-08,
+        0.5108097598853623,
+        2.528700575386273e-05,
+        0.2684423343926479,
+        0.220722602786366
+      ],
+      "y": [
+        5.2593876734071447e-05,
+        0.4204652481724498,
+        0.005474076812341026,
+        0.5740050700148184,
+        3.011123656775072e-06
+      ],
+      "certificate": {
+        "eta": 0.01454928352675705,
+        "regret1": 0.004358463170834548,
+        "regret2": 0.01454928352675705,
+        "rho1": 0.4558900246424473,
+        "rho2": 0.46148360458915205,
+        "best_dev1": {
+          "value": 0.46024848781328187,
+          "strategy": [
+            0.0,
+            0.35425161704874697,
+            0.014155081829175213,
+            0.3939493376996365,
+            0.23764396342244132
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.4760328881159091,
+          "strategy": [
+            0.0,
+            0.36432001753539023,
+            0.35930150319968795,
+            0.2763784792649218,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.01454928352675705,
+      "theta": [
+        1.0818848907476661,
+        1.9189732802069284
+      ],
+      "start_index": 4,
+      "start_iteration": 600
+    },
+    {
+      "iteration": 5800,
+      "residual_norm": 0.7077940089278313,
+      "objective": 0.2504861795370655,
+      "x": [
+        1.3340680419934352e-08,
+        0.5090570210788067,
+        2.0676988305120044e-05,
+        0.2669866898596391,
+        0.2239355987325686
+      ],
+      "y": [
+        4.7786366938883974e-05,
+        0.4139944981905886,
+        0.005211266806890238,
+        0.5807438638866307,
+        2.584748951479935e-06
+      ],
+      "certificate": {
+        "eta": 0.014376211386174675,
+        "regret1": 0.004397120871062199,
+        "regret2": 0.014376211386174675,
+        "rho1": 0.45582846146128186,
+        "rho2": 0.4615650097289147,
+        "best_dev1": {
+          "value": 0.46022558233234406,
+          "strategy": [
+            0.0,
+            0.3511019857310126,
+            0.01336976503446819,
+            0.3955207563859685,
+            0.24000749284855072
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.47594122111508935,
+          "strategy": [
+            0.0,
+            0.36298914901953,
+            0.3558937912993347,
+            0.28111705968113526,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.014376211386174675,
+      "theta": [
+        1.0818848907476661,
+        1.9189732802069284
+      ],
+      "start_index": 4,
+      "start_iteration": 700
+    },
+    {
+      "iteration": 5900,
+      "residual_norm": 0.7077632568290736,
+      "objective": 0.2504644138586486,
+      "x": [
+        1.1653224581035194e-08,
+        0.5076791282089019,
+        1.7392993260749022e-05,
+        0.26580904391295274,
+        0.22649442323166014
+      ],
+      "y": [
+        4.4198248084430636e-05,
+        0.4084862390461565,
+        0.005001368390938419,
+        0.5864658875539928,
+        2.306760827907566e-06
+      ],
+      "certificate": {
+        "eta": 0.014245186195443682,
+        "regret1": 0.00442932269168711,
+        "regret2": 0.014245186195443682,
+        "rho1": 0.45577333305556594,
+        "rho2": 0.46162711190579936,
+        "best_dev1": {
+          "value": 0.46020265574725305,
+          "strategy": [
+            0.0,
+            0.3485013788511997,
+            0.01275712817648762,
+            0.3968146056938357,
+            0.241926887278477
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.47587229810124304,
+          "strategy": [
+            0.0,
+            0.3618966710773501,
+            0.35318409444381316,
+            0.2849192344788367,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.014245186195443682,
+      "theta": [
+        1.0818848907476661,
+        1.9189732802069284
+      ],
+      "start_index": 4,
+      "start_iteration": 800
+    },
+    {
+      "iteration": 6000,
+      "residual_norm": 0.7077408107968354,
+      "objective": 0.250448527633681,
+      "x": [
+        1.048475743698299e-08,
+        0.5065689037019437,
+        1.4954867013022536e-05,
+        0.2648351359295515,
+        0.22858099501673443
+      ],
+      "y": [
+        4.141621816262427e-05,
+        0.4037167122702249,
+        0.004829878744887384,
+        0.5914098782950772,
+        2.1144716479347064e-06
+      ],
+      "certificate": {
+        "eta": 0.01414324938531586,
+        "regret1": 0.004456630661032079,
+        "regret2": 0.01414324938531586,
+        "rho1": 0.45572375553579103,
+        "rho2": 0.46167553796622673,
+        "best_dev1": {
+          "value": 0.4601803861968231,
+          "strategy": [
+            0.0,
+            0.3463065071155662,
+            0.012266350593655004,
+            0.3979038420444443,
+            0.2435233002463345
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.4758187873515426,
+          "strategy": [
+            0.0,
+            0.3609828061794554,
+            0.3509770606876248,
+            0.2880401331329199,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.01414324938531586,
+      "theta": [
+        1.0818848907476661,
+        1.9189732802069284
+      ],
+      "start_index": 4,
+      "start_iteration": 900
+    },
+    {
+      "iteration": 6100,
+      "residual_norm": 0.707723738577623,
+      "objective": 0.2504364450731439,
+      "x": [
+        9.637882782797099e-09,
+        0.5056563524364198,
+        1.3085139806934219e-05,
+        0.2640151657229649,
+        0.23031538706292554
+      ],
+      "y": [
+        3.919490078312137e-05,
+        0.399530433254797,
+        0.004687126802990985,
+        0.5957412696109572,
+        1.9754304715943197e-06
+      ],
+      "certificate": {
+        "eta": 0.014062192353162917,
+        "regret1": 0.004480124544422592,
+        "regret2": 0.014062192353162917,
+        "rho1": 0.4556789449599684,
+        "rho2": 0.4617139684124701,
+        "best_dev1": {
+          "value": 0.460159069504391,
+          "strategy": [
+            0.0,
+            0.3444218114064985,
+            0.01186482236747531,
+            0.3988370251043009,
+            0.24487634112172518
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.475776160765633,
+          "strategy": [
+            0.0,
+            0.3602062739758942,
+            0.3491441184954627,
+            0.2906496075286431,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.014062192353162917,
+      "theta": [
+        1.0818848907476661,
+        1.9189732802069284
+      ],
+      "start_index": 4,
+      "start_iteration": 1000
+    },
+    {
+      "iteration": 6200,
+      "residual_norm": 0.7077103181417249,
+      "objective": 0.25042694720213077,
+      "x": [
+        9.001886321468083e-09,
+        0.5048938427064067,
+        1.1613411659070225e-05,
+        0.2633143888495864,
+        0.23178014603046143
+      ],
+      "y": [
+        3.737949761175829e-05,
+        0.3958152399443948,
+        0.004566430873344772,
+        0.5995790783159813,
+        1.8713686672219965e-06
+      ],
+      "certificate": {
+        "eta": 0.013929679260091865,
+        "regret1": 0.004500579617136402,
+        "regret2": 0.013929679260091865,
+        "rho1": 0.4556382362472492,
+        "rho2": 0.4617449045060194,
+        "best_dev1": {
+          "value": 0.4601388158643856,
+          "strategy": [
+            0.0,
+            0.34278074373393824,
+            0.011530633949278632,
+            0.39964790723611393,
+            0.2460407150806693
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.47567458376611127,
+          "strategy": [
+            0.0,
+            0.3595375916178723,
+            0.34759708632565134,
+            0.2928653220564764,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.013929679260091865,
+      "theta": [
+        1.0818848907476661,
+        1.9189732802069284
+      ],
+      "start_index": 4,
+      "start_iteration": 1100
+    },
+    {
+      "iteration": 6300,
+      "residual_norm": 0.7076994845766634,
+      "objective": 0.25041928023503757,
+      "x": [
+        8.510480817872552e-09,
+        0.504247857866704,
+        1.0429837142005391e-05,
+        0.2627077860091216,
+        0.23303391777655152
+      ],
+      "y": [
+        3.5867538253656145e-05,
+        0.39248772993677583,
+        0.004463033237373585,
+        0.6030115779762489,
+        1.7913113481506158e-06
+      ],
+      "certificate": {
+        "eta": 0.013800967661693309,
+        "regret1": 0.0045185695932775105,
+        "regret2": 0.013800967661693309,
+        "rho1": 0.4556010735278956,
+        "rho2": 0.46177009981486006,
+        "best_dev1": {
+          "value": 0.4601196431211731,
+          "strategy": [
+            0.0,
+            0.34133531379800847,
+            0.011248508119232,
+            0.4003607831238606,
+            0.2470553949588988
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.47557106747655337,
+          "strategy": [
+            0.0,
+            0.35895512002914176,
+            0.34627343825737655,
+            0.2947714417134817,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.013800967661693309,
+      "theta": [
+        1.0818848907476661,
+        1.9189732802069284
+      ],
+      "start_index": 4,
+      "start_iteration": 1200
+    },
+    {
+      "iteration": 6400,
+      "residual_norm": 0.7076905494440756,
+      "objective": 0.25041295688622883,
+      "x": [
+        8.121852312757104e-09,
+        0.5036941460238715,
+        9.460744919719354e-06,
+        0.262176867540964,
+        0.23411951756839258
+      ],
+      "y": [
+        3.4588486739500994e-05,
+        0.3894843074260232,
+        0.004373457213825285,
+        0.6061059185577355,
+        1.7283156765043051e-06
+      ],
+      "certificate": {
+        "eta": 0.013691258567075093,
+        "regret1": 0.004534529595405401,
+        "regret2": 0.013691258567075093,
+        "rho1": 0.4555669936691031,
+        "rho2": 0.46179081611214223,
+        "best_dev1": {
+          "value": 0.4601015232645085,
+          "strategy": [
+            0.0,
+            0.3400499042023157,
+            0.011007460783022258,
+            0.40099365129630343,
+            0.24794898371835866
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.4754820746792173,
+          "strategy": [
+            0.0,
+            0.3584426134400287,
+            0.3451276029576757,
+            0.2964297836022957,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.013691258567075093,
+      "theta": [
+        1.0818848907476661,
+        1.9189732802069284
+      ],
+      "start_index": 4,
+      "start_iteration": 1300
+    },
+    {
+      "iteration": 6500,
+      "residual_norm": 0.7076830501323074,
+      "objective": 0.2504076497222829,
+      "x": [
+        7.808476937900728e-09,
+        0.503214737843269,
+        8.65506705135236e-06,
+        0.26170766932198075,
+        0.2350689299592222
+      ],
+      "y": [
+        3.349219028363571e-05,
+        0.3867554404921083,
+        0.004295104510545008,
+        0.608914285005886,
+        1.6778011771649423e-06
+      ],
+      "certificate": {
+        "eta": 0.013596735788166447,
+        "regret1": 0.004548796442455205,
+        "regret2": 0.013596735788166447,
+        "rho1": 0.4555356099890062,
+        "rho2": 0.46180798168040516,
+        "best_dev1": {
+          "value": 0.4600844064314614,
+          "strategy": [
+            0.0,
+            0.338897434867236,
+            0.010799388644690412,
+            0.40156017244729897,
+            0.24874300404077454
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.4754047174685716,
+          "strategy": [
+            0.0,
+            0.35798763907844444,
+            0.34412558666469767,
+            0.297886774256858,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.013596735788166447,
+      "theta": [
+        1.0818848907476661,
+        1.9189732802069284
+      ],
+      "start_index": 4,
+      "start_iteration": 1400
+    },
+    {
+      "iteration": 6600,
+      "residual_norm": 0.7076766650268888,
+      "objective": 0.25040313111178963,
+      "x": [
+        7.551585115196023e-09,
+        0.5027960436902933,
+        7.976400961001258e-06,
+        0.2612894482102434,
+        0.23590652414691715
+      ],
+      "y": [
+        3.254200242331052e-05,
+        0.38426184498230476,
+        0.004225994769997082,
+        0.6114779816061354,
+        1.6366391395451812e-06
+      ],
+      "certificate": {
+        "eta": 0.0135145313223059,
+        "regret1": 0.004561635397370034,
+        "regret2": 0.0135145313223059,
+        "rho1": 0.45550659816949984,
+        "rho2": 0.4618222927322249,
+        "best_dev1": {
+          "value": 0.4600682335668699,
+          "strategy": [
+            0.0,
+            0.33785688934746866,
+            0.010618181123447642,
+            0.4020709308639696,
+            0.24945399866511395
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.4753368240545308,
+          "strategy": [
+            0.0,
+            0.35758052393757744,
+            0.343241522807555,
+            0.29917795325486757,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.0135145313223059,
+      "theta": [
+        1.0818848907476661,
+        1.9189732802069284
+      ],
+      "start_index": 4,
+      "start_iteration": 1500
+    },
+    {
+      "iteration": 6700,
+      "residual_norm": 0.7076711637207993,
+      "objective": 0.2503992379809752,
+      "x": [
+        7.337990172035517e-09,
+        0.5024276006959335,
+        7.398168431666763e-06,
+        0.2609138059271372,
+        0.23665118787050735
+      ],
+      "y": [
+        3.1710514497161556e-05,
+        0.381971871428712,
+        0.0041645922442007325,
+        0.6138302231833129,
+        1.6026292771989682e-06
+      ],
+      "certificate": {
+        "eta": 0.013442450004980455,
+        "regret1": 0.004573258484325771,
+        "regret2": 0.013442450004980455,
+        "rho1": 0.45547968466610544,
+        "rho2": 0.46183428034015755,
+        "best_dev1": {
+          "value": 0.4600529431504312,
+          "strategy": [
+            0.0,
+            0.336911665748285,
+            0.01045914235614687,
+            0.40253427431932365,
+            0.25009491757624447
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.475276730345138,
+          "strategy": [
+            0.0,
+            0.35721363307316417,
+            0.34245538641442574,
+            0.30033098051241014,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.013442450004980455,
+      "theta": [
+        1.0818848907476661,
+        1.9189732802069284
+      ],
+      "start_index": 4,
+      "start_iteration": 1600
+    },
+    {
+      "iteration": 6800,
+      "residual_norm": 0.707666376703988,
+      "objective": 0.25039585035867534,
+      "x": [
+        7.158189382083912e-09,
+        0.5021012251374922,
+        6.900556390917287e-06,
+        0.260574084821223,
+        0.23731778232670447
+      ],
+      "y": [
+        3.097681036140673e-05,
+        0.3798596689821839,
+        0.004109687526175687,
+        0.6159980924958824,
+        1.574185396638121e-06
+      ],
+      "certificate": {
+        "eta": 0.01337878449358687,
+        "regret1": 0.00458383736720458,
+        "regret2": 0.01337878449358687,
+        "rho1": 0.4554546373651689,
+        "rho2": 0.4618443557449581,
+        "best_dev1": {
+          "value": 0.46003847473237347,
+          "strategy": [
+            0.0,
+            0.3360484456713915,
+            0.010318603723433765,
+            0.40295688941828395,
+            0.25067606118689073
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.47522314023854495,
+          "strategy": [
+            0.0,
+            0.3568808631793984,
+            0.34175143828641225,
+            0.3013676985341894,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.01337878449358687,
+      "theta": [
+        1.0818848907476661,
+        1.9189732802069284
+      ],
+      "start_index": 4,
+      "start_iteration": 1700
+    },
+    {
+      "iteration": 6900,
+      "residual_norm": 0.7076621763001397,
+      "objective": 0.250392877882925,
+      "x": [
+        7.005183153930653e-09,
+        0.5018104253312239,
+        6.468523344039527e-06,
+        0.2602649414759291,
+        0.23791815766431976
+      ],
+      "y": [
+        3.0324645913182152e-05,
+        0.3779038660197789,
+        0.004060315033537286,
+        0.618003944161395,
+        1.5501393756899943e-06
+      ],
+      "certificate": {
+        "eta": 0.013322187854630019,
+        "regret1": 0.004593512611226924,
+        "regret2": 0.013322187854630019,
+        "rho1": 0.4554312581079602,
+        "rho2": 0.4618528417160529,
+        "best_dev1": {
+          "value": 0.4600247707191871,
+          "strategy": [
+            0.0,
+            0.3352563990878896,
+            0.01019365733686286,
+            0.4033442055716642,
+            0.25120573800358326
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.4751750295706829,
+          "strategy": [
+            0.0,
+            0.35657727982370696,
+            0.3411171405983881,
+            0.3023055795779049,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.013322187854630019,
+      "theta": [
+        1.0818848907476661,
+        1.9189732802069284
+      ],
+      "start_index": 4,
+      "start_iteration": 1800
+    },
+    {
+      "iteration": 7000,
+      "residual_norm": 0.7076584643198829,
+      "objective": 0.25039025106178747,
+      "x": [
+        6.873716441719981e-09,
+        0.5015499864287841,
+        6.09046492285152e-06,
+        0.2599820397375666,
+        0.2384618764950099
+      ],
+      "y": [
+        2.974120928215356e-05,
+        0.37608660313545744,
+        0.00401569428029684,
+        0.6198664317600626,
+        1.5296149009920312e-06
+      ],
+      "certificate": {
+        "eta": 0.013271583908410434,
+        "regret1": 0.004602400475523238,
+        "regret2": 0.013271583908410434,
+        "rho1": 0.45540937671422965,
+        "rho2": 0.4618599946876644,
+        "best_dev1": {
+          "value": 0.4600117771897529,
+          "strategy": [
+            0.0,
+            0.3345266131476457,
+            0.010081968545934138,
+            0.40370068484952004,
+            0.25169073345690013
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.47513157859607486,
+          "strategy": [
+            0.0,
+            0.35629885284474705,
+            0.34054238524861086,
+            0.3031587619066421,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.013271583908410434,
+      "theta": [
+        1.0818848907476661,
+        1.9189732802069284
+      ],
+      "start_index": 4,
+      "start_iteration": 1900
+    },
+    {
+      "iteration": 7100,
+      "residual_norm": 0.7076551638478968,
+      "objective": 0.2503879154602969,
+      "x": [
+        6.759777352006958e-09,
+        0.5013156713067941,
+        5.757299270954432e-06,
+        0.2597218257895059,
+        0.23895673884465166
+      ],
+      "y": [
+        2.921625647272473e-05,
+        0.3743928118893623,
+        0.00397518732546757,
+        0.6216012725848796,
+        1.5119438178253187e-06
+      ],
+      "certificate": {
+        "eta": 0.013226102927285988,
+        "regret1": 0.004610597981302589,
+        "regret2": 0.013226102927285988,
+        "rho1": 0.45538884619287356,
+        "rho2": 0.4618660206590949,
+        "best_dev1": {
+          "value": 0.45999944417417615,
+          "strategy": [
+            0.0,
+            0.3338516739348124,
+            0.009981641378494251,
+            0.4040300339728485,
+            0.25213665071384483
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        },
+        "best_dev2": {
+          "value": 0.47509212358638087,
+          "strategy": [
+            0.0,
+            0.3560422602338329,
+            0.3400189345894606,
+            0.3039388051767065,
+            0.0
+          ],
+          "success": true,
+          "message": "Optimization terminated successfully. (HiGHS Status 7: Optimal)"
+        }
+      },
+      "eta": 0.013226102927285988,
+      "theta": [
+        1.0818848907476661,
+        1.9189732802069284
+      ],
+      "start_index": 4,
+      "start_iteration": 2000
+    }
+  ],
+  "metrics": {
+    "success": false,
+    "time_s": 13.272087822999993,
+    "eta": 0.013226102927285988,
+    "regret1": 0.004610597981302589,
+    "regret2": 0.013226102927285988,
+    "has_profile": true,
+    "error": null,
+    "solver": null,
+    "candidate_index": null,
+    "support_eta": null,
+    "screen_eta": null,
+    "best_screen_eta": null,
+    "best_screen_success": null,
+    "best_screen_violation": null,
+    "best_screen_candidate_index": null,
+    "best_screen_message": null,
+    "support_violation": null,
+    "residual_norm": 0.7076551638478968,
+    "objective": 0.2503879154602969,
+    "iterations": 7100,
+    "best_certificate_eta": 0.013226102927285988,
+    "best_certificate_iteration": 7100,
+    "starts_attempted": 5,
+    "selected_start": 4,
+    "start_summaries": "[{\"start_index\": 0, \"seed\": 1100633, \"initial_x\": [0.2, 0.2, 0.2, 0.2, 0.2], \"initial_y\": [0.2, 0.2, 0.2, 0.2, 0.2], \"eta\": 0.03733487605331942, \"success\": false, \"iterations\": 500, \"time_s\": 4.647131806000061, \"termination_reason\": \"stagnation\"}, {\"start_index\": 1, \"seed\": 2676984338, \"initial_x\": [0.2220488311014077, 0.017265135924861907, 0.22289508161680058, 0.402815516737602, 0.13497543461932793], \"initial_y\": [0.0682832585032166, 0.37539618334166447, 0.16430300329517494, 0.10086394442354416, 0.29115361043639976], \"eta\": 0.030221427085304342, \"success\": false, \"iterations\": 2000, \"time_s\": 2.5101168329999837, \"termination_reason\": \"max_iter\"}, {\"start_index\": 2, \"seed\": 3335276243, \"initial_x\": [0.01723315497934158, 0.10657936824765847, 0.3082474838118072, 0.22461961271821526, 0.3433203802429775], \"initial_y\": [0.5079197858572845, 0.09662134639970495, 0.12906079997817435, 0.22423053141722427, 0.04216753634761186], \"eta\": 0.018164526071828058, \"success\": false, \"iterations\": 2000, \"time_s\": 2.724759191999965, \"termination_reason\": \"max_iter\"}, {\"start_index\": 3, \"seed\": 3622402129, \"initial_x\": [0.12350929810083235, 0.5714870154220796, 0.13383259278466605, 0.11737907494210807, 0.053792018750314], \"initial_y\": [0.6825717823971761, 0.18028790681031112, 0.01922205778427376, 0.0811599397060185, 0.03675831330222043], \"eta\": 0.02816369752188347, \"success\": false, \"iterations\": 600, \"time_s\": 1.1935247139999774, \"termination_reason\": \"stagnation\"}, {\"start_index\": 4, \"seed\": 743496872, \"initial_x\": [0.4745683157948769, 0.04753173812901563, 0.1743244948829221, 0.17561090208175903, 0.1279645491114264], \"initial_y\": [0.1588320624796676, 0.47406588537462435, 0.02429344597884825, 0.20510209350228029, 0.13770651266457962], \"eta\": 0.013226102927285988, \"success\": false, \"iterations\": 2000, \"time_s\": 2.1912938139998914, \"termination_reason\": \"max_iter\"}]",
+    "termination_reason": "max_iter"
+  },
+  "lp_options": {
+    "library": "scipy.optimize.linprog",
+    "method": "highs",
+    "options": null,
+    "tolerances": "Defaults of the recorded SciPy/HiGHS version; no explicit overrides",
+    "status": "Success and message preserved in certificate best responses where returned"
+  }
+}

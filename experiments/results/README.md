@@ -10,8 +10,7 @@ bytes. Historical command strings inside these artifacts are provenance; use the
 
 | Presentation | Sources |
 | --- | --- |
-| README uniform-game algorithms | `scalability/msd_cvar_original` (MSD), `scalability/cvar_capped_24h_v1` (CVaR), `qptas_scalability/sampled_1000_v1` |
-| README uniform-profile baseline | `uniform_baseline/v1` |
+| README uniform-game algorithms | `scalability/msd_cvar_original` (MSD), `scalability/cvar_capped_24h_v1` (CVaR), `qptas_scalability/sampled_1000_v1`, `uniform_qptas_fo/calibrated_v1` |
 | README heterogeneous-population figure | `population_qptas_fo/beta_uniform_v2` |
 | Notebook screening comparison | `scalability/equal_screen_v1` |
 | Notebook FO diagnostics | `stochastic_fo/continuation_v2` and `continuation_v3` |
@@ -21,9 +20,18 @@ bytes. Historical command strings inside these artifacts are provenance; use the
 Both README comparisons count success only for completed attempts with a finite
 recorded certificate at most 0.01. Crosses mark fewer than five successful seeds
 per method/risk/n/K cell. Runtime includes unsuccessful attempts; capped CVaR
-timeouts contribute 86,400 seconds. The uniform baseline measures certification
-of the fixed profile, not an FO iteration-zero runtime. FO appears in the
-separate population figure and remains omitted from the uniform-game figures.
+timeouts contribute 86,400 seconds. The uniform-game stochastic methods and
+screened QPTAS use `uniform_qptas_fo/calibrated_v1`, replacing the
+historical stochastic measurements with the transferred population FO settings.
+Their attempt runtimes include initialization and any iteration-zero certificate.
+
+The calibrated uniform campaign contains 2,880 completed attempts with saved
+profile/provenance sidecars and no timeouts. Its configuration and matched-seed
+coverage have been checked, and aggregate runtimes and regrets agree with the
+individual shards. Its saved certificates have not been independently recomputed.
+On the displayed grid (`K = 30, 100, 250, 500`), stochastic full batch records
+319/320 successes under each risk; minibatch records 319/320 MSD and 320/320 CVaR
+successes; screened QPTAS records 1/320 under each risk.
 
 Population v2 contains 640 completed attempts and 135 recorded successes. Neither
 QPTAS variant succeeds; screened QPTAS rejects every pair before an LP. Final FO
@@ -32,11 +40,13 @@ comparisons, with one change in success at 0.01. See the
 [certificate and replay audit](audits/consolidation_20260915/README.md) before
 using these recorded outcomes as independently reproduced evidence.
 
-The audit reprices every available profile in the presentation inputs, including
-failed profiles. It also includes the entire uniform baseline and saved calibration
-profiles. Missing-profile checks use three frozen game seeds per study/run, small
-games first, within five minutes total; unavailable configurations and timed-out
-checks remain inconclusive. Original results are never overwritten by replays.
+The September 2026 consolidation audit reprices every available profile in its
+presentation inputs, including failed profiles. It also includes the entire
+uniform baseline and saved calibration profiles. It predates
+`uniform_qptas_fo/calibrated_v1`. Missing-profile checks use three frozen game seeds
+per study/run, small games first, within five minutes total; unavailable
+configurations and timed-out checks remain inconclusive. Original results are
+never overwritten by replays.
 
 ## Retained historical sources
 
