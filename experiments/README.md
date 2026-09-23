@@ -41,6 +41,31 @@ Use a new result directory for a smoke test: set both grids and repetitions to
 small values in its copied preset. `python -m pytest tests/test_qptas_experiments.py`
 exercises an isolated tiny campaign and its resume behavior.
 
+### Uniform-payoff grid with calibrated FO settings
+
+[`uniform_qptas_fo/calibrated_v1`](configs/uniform_qptas_fo/calibrated_v1.json)
+transfers the population `beta_uniform_v2` FO settings to the original
+`K = 5, 10, 30, 100, 250, 500` and `n = 5, 10, 20, 50` grid, with independent
+Uniform[0,1] payoffs and the original 20 game seeds per risk/cell. It runs
+screened QPTAS, stochastic full batch, and stochastic minibatch: 2,880 method
+attempts across MSD and CVaR, with 8 workers and a 24-hour cap per attempt.
+
+```bash
+python -m experiments plan --campaign uniform_qptas_fo/calibrated_v1
+python -m experiments run --campaign uniform_qptas_fo/calibrated_v1 --workers 8
+python -m experiments status --campaign uniform_qptas_fo/calibrated_v1
+python -m experiments collect --campaign uniform_qptas_fo/calibrated_v1
+```
+
+FO retains entropy 0.01, smoothing 0.002, steps 1000 (MSD) / 500 (CVaR),
+decay 0.5, logit bound 20, JIT, 2,000 updates per start, up to four random
+restarts, certification every 100 updates, and the population stagnation rule
+(500 updates, rtol 0.005, atol 1e-5). These settings are transferred, not retuned
+on uniform games. Both FO and QPTAS target epsilon 0.01; screened QPTAS retains
+the 1,000-candidate budget and automatic support sizes for each `(K, n)`.
+Rerun the same `run` command to resume. Outputs go to
+`experiments/results/uniform_qptas_fo/calibrated_v1/`; GNU `timeout` is required.
+
 ## Remote transfer
 
 ```bash
@@ -62,7 +87,9 @@ python -m experiments sync --campaign population_qptas_fo/beta_uniform_v2 \
 ```
 
 Transfers exclude locks and partial files and never delete local files. A
-transfer failure propagates a nonzero exit status. Sync operates on any catalog
+transfer failure propagates a nonzero exit status. Sync detects the installed
+rsync's argument-protection support and quotes remote paths for older rsync
+versions, including macOS OpenRSYNC. Sync operates on any catalog
 study/run, including historical campaigns without a runnable preset. For a new
 campaign not yet in the catalog, pass its `--config` to `sync` as well.
 

@@ -15,10 +15,10 @@ to compare the computational approaches.
 ## What the package supports
 
 - Mean-semideviation (MSD) and lower-tail CVaR two-player bimatrix games.
-- Pyomo MCP model builders and solver wrappers for PATH/PATHAMPL, with an
+- Pyomo MLCP model builders and solver wrappers for PATH/PATHAMPL, with an
   optional IPOPT fallback.
-- Randomized small-support search using screening, action-dual, and restricted
-  MCP subproblems.
+- Randomized small-support search using support iteration, support iteration
+  with screening, and restricted MLCP subproblems.
 - Full-batch and minibatch stochastic first-order solvers for smoothed CUMGs.
 - Exact-regret certificates and reproducible random-game generators.
 
@@ -26,25 +26,29 @@ to compare the computational approaches.
 
 The committed scalability grid covers random two-player games with
 `n ∈ {5, 10, 20, 50}` actions per player and
-`K ∈ {5, 10, 30, 100, 250, 500}` payoff samples. The figures compare five
-algorithms and a uniform-profile baseline on the same 20 game seeds within
-each displayed `(risk, K, n)` cell. Payoffs are sampled independently from
+`K ∈ {5, 10, 30, 100, 250, 500}` payoff samples. The figures compare eight
+algorithms on the same 20 game seeds within each displayed `(risk, K, n)` cell.
+Payoffs are sampled independently from
 `Uniform[0, 1]`, with `gamma=0.5`, `alpha=0.5` for CVaR, and target
 `epsilon=0.01`. The figures omit `K=5` and `K=10` for legibility.
 
 The final CVaR campaign imposes a 24-hour wall-clock cap separately on every
 method and replicate. Timeout runtimes are therefore right-censored at 86,400
-seconds. The four plotted MCP and support-search methods use the original
-uncapped MSD campaign.
+seconds. The four plotted MLCP and support-iteration methods use the original
+uncapped MSD campaign. Both QPTAS variants and the stochastic methods have a
+24-hour cap under both risks.
 Sampled QPTAS checks up to 1,000 distinct joint profiles with
-`kappa=ceil(sqrt(n))`, using all K samples for each best-response LP; it has a
-24-hour per-run cap for both risks. Runtime is the duration of the configured
-attempt, whether or not it produced a certificate. The uniform baseline's
-runtime measures full-regret certification of the fixed uniform profile,
-excluding game generation. It comes from the separately timed baseline runs.
-The stochastic full-batch and minibatch methods are omitted from these
-uniform-game figures; their saved histories do not isolate the iteration-zero
-certificate's runtime. The separate population campaign below includes both FO methods.
+`kappa=ceil(sqrt(n))`, using all K samples for each best-response LP. Screened
+QPTAS uses a budget of 1,000 joint strategy/witness pairs and screening tolerance
+`2 epsilon / 3`. The screened QPTAS, stochastic full-batch, and stochastic
+minibatch results come from
+[`uniform_qptas_fo/calibrated_v1`](experiments/configs/uniform_qptas_fo/calibrated_v1.json),
+which transfers the population campaign's calibrated FO settings described
+below to the original uniform-payoff games.
+
+Runtime is the duration of the configured attempt, whether or not it produced
+a certificate. Stochastic runtimes include solver initialization and the
+initial regret check; a passing uniform start can finish without any updates.
 
 ### Runtime scaling
 
@@ -63,34 +67,32 @@ times.*
 
 *Success uses the same finite-certificate threshold and cross markers as the
 runtime figure. The methods' native success flags do not determine the plotted
-counts. The uniform profile is included as a diagnostic baseline on the same
-game seeds in both figures.*
+counts.*
 
 ### Main takeaways
 
-- **CVaR equilibrium solves take longer.** Among the five plotted algorithms,
-  126 of 1,600 CVaR runs reached the 24-hour cap: 75 action-dual and
-  51 screened-dual runs. No other method recorded a timeout.
-- **Exact methods do not converge with scale.** Direct MCP
-  and restricted MCP often terminate much sooner than the sparse-support
+- **Some CVaR searches reach the time cap.** Among the eight plotted algorithms,
+  126 of 2,560 CVaR runs reached the 24-hour cap: 75 support-iteration runs and
+  51 support-iteration runs with screening. No other method recorded a timeout.
+- **MLCP certificate rates fall as the action space grows.** MLCP
+  and restricted MLCP often terminate much sooner than the sparse-support
   methods, but their common-certificate rates fall sharply as the action space
   grows. At `K=500, n=50`, neither method certifies any of the 20 games under
   either risk model.
-- **Sparse-support robustness takes time.** Action dual certifies all 320
+- **Sparse-support robustness takes time.** Support iteration certifies all 320
   displayed MSD instances, but its median runtime across those instances is
   about 300 seconds. Under CVaR its certificate rate is 245/320 and it accounts
   for most capped runs.
-- **Uniform-profile certification is inexpensive on this grid.** At
-  `K=500, n=50`, it certifies all 20 games for each risk, with median recorded
-  certification times of about 0.031 seconds for MSD and 0.047 seconds for CVaR.
+- **Calibrated stochastic methods certify nearly every displayed game.**
+  Full batch certifies 319/320 instances under each risk; minibatch certifies
+  319/320 MSD and 320/320 CVaR instances. These include games certified at the
+  initial uniform profile.
 - **Sampled QPTAS finds certificates within a small search budget.** It certifies
   256/320 displayed MSD instances and 204/320 CVaR instances within 1,000 sampled
   profiles per instance. Unsuccessful runs exhaust that budget.
-- **The random-game design has a strong concentration effect.** The uniform
-  profile is already certified on 253/320 CVaR and 231/320 MSD instances and on
-  every `K=500` instance. This is an empirical feature of the i.i.d. Uniform[0,1]
-  payoff design: averaging over more payoff samples makes the risk-adjusted values of
-  alternative actions increasingly similar.
+- **Screened QPTAS rarely certifies within this budget.** It certifies 1/320
+  displayed instances under each risk. Its short attempt runtimes therefore
+  mostly describe unsuccessful searches.
 
 These comparisons are descriptive of the committed random-instance design and
 fixed algorithm configurations. They do not establish asymptotic dominance,
@@ -188,7 +190,7 @@ print(format_solver_availability())
 ```
 
 Model construction and payoff/regret utilities work without solver binaries;
-MCP solves require an available backend.
+MLCP solves require an available backend.
 
 ## Quickstart
 
@@ -272,7 +274,7 @@ and the search has no candidate cap.
 An arbitrary supplied `kappa` need not contain an epsilon-DRE: in that case,
 the result has `success=False` and `termination_reason="grid_exhausted"`.
 This does not rule out an equilibrium elsewhere. Regret checks use SciPy's
-floating-point LP solves and require no external MCP solver. Solver failures
+floating-point LP solves and require no external MLCP solver. Solver failures
 raise an exception rather than report grid exhaustion.
 
 For a remote MSD/CVaR campaign with 1,000 sampled profiles per run,

@@ -44,12 +44,22 @@ def main() -> None:
             if not destination.is_relative_to(REPO) and not args.remote_path:
                 parser.error("A destination outside the repository requires an explicit --remote-path")
             remote_path = args.remote_path or str(Path(args.remote_root) / destination.relative_to(REPO))
-        command = ["rsync", "-av", "--protect-args", "--exclude=*.lock/", "--exclude=*.partial*", "--exclude=*.tmp"]
+        rsync_help = subprocess.run(["rsync", "--help"], check=True, capture_output=True, text=True)
+        help_text = rsync_help.stdout + rsync_help.stderr
+        command = ["rsync", "-av", "--exclude=*.lock/", "--exclude=*.partial*", "--exclude=*.tmp"]
+        remote_source = remote_path.rstrip("/") + "/"
+        if "--secluded-args" in help_text:
+            command.append("--secluded-args")
+        elif "--protect-args" in help_text:
+            command.append("--protect-args")
+        else:
+            # macOS OpenRSYNC and rsync 2.x pass paths through the remote shell.
+            remote_source = shlex.quote(remote_source)
         if args.preview:
             command += ["--dry-run"]
         else:
             destination.mkdir(parents=True, exist_ok=True)
-        command += [args.remote + ":" + remote_path.rstrip("/") + "/", str(destination) + "/"]
+        command += [args.remote + ":" + remote_source, str(destination) + "/"]
         print(shlex.join(command), flush=True)
         subprocess.run(command, check=True)
         return
