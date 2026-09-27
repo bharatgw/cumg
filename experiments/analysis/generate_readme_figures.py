@@ -54,8 +54,8 @@ METHOD_LABELS = {
     "screened_dual": "Support iteration (screened)",
     "action_dual": "Support iteration",
     "restricted_mcp": "Restricted MLCP",
-    "qptas": "QPTAS",
-    "qptas_screened": "QPTAS (screened)",
+    "qptas": "sampled QPTAS",
+    "qptas_screened": "sampled QPTAS (screened)",
     "stochastic_full_batch": "Stochastic full batch",
     "stochastic_minibatch": "Stochastic minibatch",
 }
@@ -283,7 +283,7 @@ def plot_runtime(long: pd.DataFrame, output_path: Path) -> None:
         handles=handles,
         loc="lower center",
         bbox_to_anchor=(0.5, 0.005),
-        ncol=2,
+        ncol=3,
         frameon=False,
         fontsize=16,
     )
@@ -322,7 +322,7 @@ def plot_certificate_rate(long: pd.DataFrame, output_path: Path) -> None:
         handles=_method_legend(METHODS),
         loc="lower center",
         bbox_to_anchor=(0.5, 0.005),
-        ncol=2,
+        ncol=3,
         frameon=False,
         fontsize=16,
     )
@@ -387,7 +387,7 @@ def plot_population_results(long: pd.DataFrame, output_path: Path) -> None:
     fig.legend(
         handles=_method_legend(POPULATION_METHODS),
         loc="lower center",
-        ncol=2,
+        ncol=3,
         frameon=False,
         fontsize=13,
     )
