@@ -94,33 +94,20 @@ METHOD_MARKERS = {
 def load_population_data() -> pd.DataFrame:
     """Load the completed v2 campaign, requiring all 20 matched seeds per cell."""
 
-    data = pd.read_csv(
-        result_path("population_qptas_fo/beta_uniform_v2", "capped_method_results.csv")
-    )
+    data = pd.read_csv(result_path("population_qptas_fo/beta_uniform_v2", "capped_method_results.csv"))
     expected = pd.MultiIndex.from_product(
         [RISK_GRID, [50], POPULATION_K_GRID, POPULATION_METHODS],
         names=["risk", "n", "K", "method"],
     )
     cells = data.groupby(["risk", "n", "K", "method"])
     counts = cells.size().reindex(expected)
-    if (
-        len(data) != 640
-        or not counts.eq(20).all()
-        or not cells["seed"].nunique().eq(20).all()
-    ):
-        raise ValueError(
-            "Population v2 must contain 20 distinct seeds for every method cell"
-        )
+    if len(data) != 640 or not counts.eq(20).all() or not cells["seed"].nunique().eq(20).all():
+        raise ValueError("Population v2 must contain 20 distinct seeds for every method cell")
     matched = data.groupby(["risk", "n", "K", "seed"])["method"].nunique()
     if not matched.eq(len(POPULATION_METHODS)).all():
         raise ValueError("Population v2 methods must use matching game seeds")
-    if (
-        not data["payoff_model"].eq("cell_beta_uniform_v1").all()
-        or not data["status"].eq("completed").all()
-    ):
-        raise ValueError(
-            "Population v2 must contain completed heterogeneous-population runs"
-        )
+    if not data["payoff_model"].eq("cell_beta_uniform_v1").all() or not data["status"].eq("completed").all():
+        raise ValueError("Population v2 must contain completed heterogeneous-population runs")
     if not np.isfinite(data["time_s"]).all() or not data["time_s"].gt(0).all():
         raise ValueError("Population v2 must have finite positive attempt runtimes")
     return data
@@ -129,53 +116,29 @@ def load_population_data() -> pd.DataFrame:
 def load_scalability_data() -> pd.DataFrame:
     """Load eight algorithms on matched game seeds."""
 
-    msd_wide = sa.load_csv_shards(
-        result_path("scalability/msd_cvar_original"), "*K*_n*.csv"
-    )
+    msd_wide = sa.load_csv_shards(result_path("scalability/msd_cvar_original"), "*K*_n*.csv")
     msd_wide = msd_wide.loc[msd_wide["risk"].eq("msd")].copy()
 
-    capped = pd.read_csv(
-        result_path("scalability/cvar_capped_24h_v1", "capped_method_results.csv")
-    )
-    cvar_wide = sa.capped_results_to_wide(
-        capped, expected_methods=sa.SCALABILITY_METHODS
-    )
+    capped = pd.read_csv(result_path("scalability/cvar_capped_24h_v1", "capped_method_results.csv"))
+    cvar_wide = sa.capped_results_to_wide(capped, expected_methods=sa.SCALABILITY_METHODS)
     wide = pd.concat([msd_wide, cvar_wide], ignore_index=True, sort=False)
     # The calibrated campaign replaces the historical FO measurements.
-    legacy_methods = tuple(
-        method for method in sa.SCALABILITY_METHODS if method not in CALIBRATED_METHODS
-    )
+    legacy_methods = tuple(method for method in sa.SCALABILITY_METHODS if method not in CALIBRATED_METHODS)
     long = sa.wide_scalability_to_long(wide, methods=legacy_methods)
 
-    qptas = pd.read_csv(
-        result_path("qptas_scalability/sampled_1000_v1", "capped_method_results.csv")
-    )
+    qptas = pd.read_csv(result_path("qptas_scalability/sampled_1000_v1", "capped_method_results.csv"))
     qptas_wide = sa.capped_results_to_wide(qptas, expected_methods=("qptas",))
     qptas_long = sa.wide_scalability_to_long(qptas_wide, methods=("qptas",))
 
-    calibrated = pd.read_csv(
-        result_path("uniform_qptas_fo/calibrated_v1", "capped_method_results.csv")
-    )
-    if (
-        not calibrated["payoff_model"].eq("uniform").all()
-        or not calibrated["epsilon"].eq(EPSILON).all()
-    ):
-        raise ValueError(
-            "Calibrated uniform-game results must use uniform payoffs and epsilon=0.01"
-        )
-    calibrated_wide = sa.capped_results_to_wide(
-        calibrated, expected_methods=CALIBRATED_METHODS
-    )
-    calibrated_long = sa.wide_scalability_to_long(
-        calibrated_wide, methods=CALIBRATED_METHODS
-    )
+    calibrated = pd.read_csv(result_path("uniform_qptas_fo/calibrated_v1", "capped_method_results.csv"))
+    if not calibrated["payoff_model"].eq("uniform").all() or not calibrated["epsilon"].eq(EPSILON).all():
+        raise ValueError("Calibrated uniform-game results must use uniform payoffs and epsilon=0.01")
+    calibrated_wide = sa.capped_results_to_wide(calibrated, expected_methods=CALIBRATED_METHODS)
+    calibrated_long = sa.wide_scalability_to_long(calibrated_wide, methods=CALIBRATED_METHODS)
     long = pd.concat([long, qptas_long, calibrated_long], ignore_index=True, sort=False)
 
     long = long.loc[
-        long["risk"].isin(RISK_GRID)
-        & long["n"].isin(N_GRID)
-        & long["K"].isin(K_GRID)
-        & long["method"].isin(METHODS)
+        long["risk"].isin(RISK_GRID) & long["n"].isin(N_GRID) & long["K"].isin(K_GRID) & long["method"].isin(METHODS)
     ].copy()
 
     attempt_times = pd.to_numeric(long["time_s"], errors="coerce")
@@ -186,21 +149,11 @@ def load_scalability_data() -> pd.DataFrame:
     cells = primary.groupby(["risk", "n", "K", "method"], dropna=False)
     cell_counts = cells.size()
     expected_cells = len(RISK_GRID) * len(N_GRID) * len(K_GRID) * len(METHODS)
-    if (
-        len(cell_counts) != expected_cells
-        or not cell_counts.eq(20).all()
-        or not cells["seed"].nunique().eq(20).all()
-    ):
-        raise ValueError(
-            "Scalability data do not contain 20 distinct seeds for every plotted method cell"
-        )
-    matched_methods = primary.groupby(["risk", "n", "K", "seed"], dropna=False)[
-        "method"
-    ].nunique()
+    if len(cell_counts) != expected_cells or not cell_counts.eq(20).all() or not cells["seed"].nunique().eq(20).all():
+        raise ValueError("Scalability data do not contain 20 distinct seeds for every plotted method cell")
+    matched_methods = primary.groupby(["risk", "n", "K", "seed"], dropna=False)["method"].nunique()
     if not matched_methods.eq(len(METHODS)).all():
-        raise ValueError(
-            "Scalability methods do not use the same seeds within each plotted cell"
-        )
+        raise ValueError("Scalability methods do not use the same seeds within each plotted cell")
 
     return long
 
@@ -253,9 +206,7 @@ def _method_legend(methods: tuple[str, ...]) -> list[Line2D]:
     return handles
 
 
-def _plot_method_points(
-    ax, points: pd.DataFrame, method: str, value_column: str
-) -> None:
+def _plot_method_points(ax, points: pd.DataFrame, method: str, value_column: str) -> None:
     """Draw a method curve, replacing its marker when too few seeds certify."""
 
     color = METHOD_COLORS[method]
@@ -317,9 +268,7 @@ def plot_runtime(long: pd.DataFrame, output_path: Path) -> None:
                 )
 
             if risk == "cvar":
-                ax.axhline(
-                    CVaR_CAP_SECONDS, color="#555555", linestyle="--", linewidth=1
-                )
+                ax.axhline(CVaR_CAP_SECONDS, color="#555555", linestyle="--", linewidth=1)
             ax.set_yscale("log")
             ax.set_xticks(K_GRID)
             ax.set_title(f"{risk.upper()} · n={n}", fontsize=16)
@@ -329,9 +278,7 @@ def plot_runtime(long: pd.DataFrame, output_path: Path) -> None:
                 ax.set_ylabel("Median runtime (seconds)", fontsize=15)
 
     handles = _method_legend(METHODS)
-    handles.append(
-        Line2D([0], [0], color="#555555", linestyle="--", label="CVaR 24-hour cap")
-    )
+    handles.append(Line2D([0], [0], color="#555555", linestyle="--", label="CVaR 24-hour cap"))
     fig.legend(
         handles=handles,
         loc="lower center",
@@ -369,9 +316,7 @@ def plot_certificate_rate(long: pd.DataFrame, output_path: Path) -> None:
             if row == len(RISK_GRID) - 1:
                 ax.set_xlabel("Samples K", fontsize=15)
             if col == 0:
-                ax.set_ylabel(
-                    "Share with exact-regret\n" r"$\eta \leq 10^{-2}$", fontsize=15
-                )
+                ax.set_ylabel("Share with exact-regret\n" r"$\eta \leq 10^{-2}$", fontsize=15)
 
     fig.legend(
         handles=_method_legend(METHODS),
@@ -453,9 +398,7 @@ def plot_population_results(long: pd.DataFrame, output_path: Path) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--study", choices=("scalability", "population", "all"), default="all"
-    )
+    parser.add_argument("--study", choices=("scalability", "population", "all"), default="all")
     args = parser.parse_args()
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     if args.study in ("scalability", "all"):
@@ -463,9 +406,7 @@ def main() -> None:
         plot_runtime(long, OUTPUT_DIR / "scalability_runtime.png")
         plot_certificate_rate(long, OUTPUT_DIR / "scalability_certificate_rate.png")
     if args.study in ("population", "all"):
-        plot_population_results(
-            load_population_data(), OUTPUT_DIR / "population_beta_uniform_v2.png"
-        )
+        plot_population_results(load_population_data(), OUTPUT_DIR / "population_beta_uniform_v2.png")
     print(f"Wrote README figures to {OUTPUT_DIR.relative_to(ROOT)}")
 
 
